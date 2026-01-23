@@ -5,9 +5,85 @@
 		Layers,
 		Link2,
 		Menu,
-		X
+		X,
+		Globe,
+		Shield,
+		Bot,
+		BadgeCheck,
+		CreditCard,
+		MessageSquareText,
+		Download,
+		UserPlus,
+		Sparkles,
+		CheckCircle2,
+		Brain
 	} from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
+
+	// Core Features Data
+	const coreFeatures = [
+		{
+			icon: Globe,
+			title: 'Thai Language & Context NLP',
+			description: 'Natural Language Processing that understands Thai slang, formal business language, and local address formats that global tools often miss.',
+			gradient: 'from-emerald-500 to-teal-600',
+			shadow: 'shadow-emerald-200',
+			badge: 'Thai-First AI'
+		},
+		{
+			icon: Shield,
+			title: 'PDPA Compliance Engine',
+			description: 'A built-in "Legitimate Interest" framework that automatically filters or processes data to ensure you stay within Thailand\'s privacy laws.',
+			gradient: 'from-blue-500 to-indigo-600',
+			shadow: 'shadow-blue-200',
+			badge: 'Privacy-Safe'
+		},
+		{
+			icon: Bot,
+			title: 'Autonomous "Scout" Agent',
+			description: 'A core AI agent that can take a broad goal (e.g., "Find all boutique hotels in Phuket") and return a list of verified leads without manual oversight.',
+			gradient: 'from-violet-500 to-purple-600',
+			shadow: 'shadow-violet-200',
+			badge: 'AI-Powered'
+		},
+		{
+			icon: BadgeCheck,
+			title: 'Lead Verification',
+			description: 'A process to ensure contact information is accurate, reducing the "Double Cost" of bad data that wastes your sales team\'s time.',
+			gradient: 'from-rose-500 to-pink-600',
+			shadow: 'shadow-rose-200',
+			badge: 'Verified Data'
+		}
+	];
+
+	// Quality of Life Features Data
+	const qolFeatures = [
+		{
+			icon: CreditCard,
+			title: 'Credit Management Dashboard',
+			description: 'See how many of your 50 free credits you have left and how many leads you\'ve generated at a glance.'
+		},
+		{
+			icon: MessageSquareText,
+			title: '"No-Code" Goal Input',
+			description: 'Simply type what you need in plain language. No complex forms or data parameters required.'
+		},
+		{
+			icon: Download,
+			title: 'One-Click Export',
+			description: 'Download your lead list as CSV or Excel instantly. No waiting, no extra steps.'
+		},
+		{
+			icon: UserPlus,
+			title: 'Zero-Friction Onboarding',
+			description: 'See your first three leads before creating an account or adding a credit card.'
+		},
+        {
+            icon: Brain,
+            title: 'AI-Powered Lead Scoring',
+            description: 'Score leads based on their likelihood to convert into a sale.'
+        }
+	];
 
 	let mobileMenuOpen = $state(false);
 
@@ -45,30 +121,30 @@
 
 	<!-- Navigation -->
 	<nav class="navbar-blur fixed top-4 left-1/2 z-50 -translate-x-1/2 transform rounded-lg md:rounded-full border border-slate-200/60 px-2 py-2 shadow-lg shadow-slate-200/50 md:px-4">
-		<div class="flex items-center gap-2 md:gap-6">
+		<div class="flex flex-nowrap items-center gap-2 md:gap-6">
 			<!-- Logo -->
-			<a href="/" class="flex items-center gap-2 pl-2 md:pl-4">
-				<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-600 to-purple-700">
+			<a href="/" class="flex shrink-0 items-center gap-2 pl-2 md:pl-4">
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-violet-600 to-purple-700">
 					<Zap class="h-4 w-4 text-white" />
 				</div>
-				<span class="font-sans text-lg font-bold text-slate-800">Julist V2</span>
+				<span class="font-sans text-lg font-bold text-slate-800 whitespace-nowrap">Julist V2</span>
 			</a>
 
 			<!-- Desktop Navigation -->
-			<div class="hidden items-center gap-6 md:flex">
-				<a href="#features" class="font-mono text-sm font-medium text-slate-600 transition-colors hover:text-violet-600">Features</a>
-				<a href="#pricing" class="font-mono text-sm font-medium text-slate-600 transition-colors hover:text-violet-600">Pricing</a>
-				<a href="#integrations" class="font-mono text-sm font-medium text-slate-600 transition-colors hover:text-violet-600">Integrations</a>
+			<div class="hidden shrink-0 items-center gap-6 md:flex">
+				<a href="#features" class="font-mono text-sm font-medium text-slate-600 transition-colors hover:text-violet-600 whitespace-nowrap">Features</a>
+				<a href="#pricing" class="font-mono text-sm font-medium text-slate-600 transition-colors hover:text-violet-600 whitespace-nowrap">Pricing</a>
+				<a href="#integrations" class="font-mono text-sm font-medium text-slate-600 transition-colors hover:text-violet-600 whitespace-nowrap">Integrations</a>
 			</div>
 
 			<!-- CTA Buttons -->
-			<div class="flex items-center gap-2 md:gap-3">
-				<button class="btn-primary-custom hidden rounded-full px-5 py-2.5 text-sm font-semibold text-white md:block">
+			<div class="flex shrink-0 items-center gap-2 md:gap-3">
+				<button class="btn-primary-custom hidden rounded-full px-5 py-2.5 text-sm font-semibold text-white md:block whitespace-nowrap">
 					Start Free Pro Trial
 				</button>
-				<a href="#signin" class="hidden items-center gap-1 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:text-violet-600 md:flex">
+				<a href="#signin" class="hidden items-center gap-1 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:text-violet-600 md:flex whitespace-nowrap">
 					Sign In
-					<ArrowRight class="h-4 w-4" />
+					<ArrowRight class="h-4 w-4 shrink-0" />
 				</a>
 
 				<!-- Mobile menu button -->
@@ -267,6 +343,118 @@
 					<p class="mt-2 text-sm leading-relaxed text-slate-600">
 						Automate repetitive tasks with intelligent workflows that adapt to your business needs.
 					</p>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<!-- Core Features Section -->
+	<section id="features" class="relative px-4 py-20 md:py-32 overflow-hidden">
+		<!-- Background decoration -->
+		<div class="absolute inset-0 bg-linear-to-b from-slate-50/80 via-white to-violet-50/30"></div>
+		<div class="absolute top-0 left-1/2 -translate-x-1/2 w-200 h-200 bg-gradient-radial from-violet-100/40 to-transparent rounded-full blur-3xl"></div>
+
+		<div class="relative mx-auto max-w-6xl">
+			<div class="text-center mb-16">
+				<span class="font-mono inline-flex items-center gap-2 rounded-full bg-linear-to-r from-violet-100 to-purple-100 px-4 py-1.5 text-sm font-medium text-violet-700 border border-violet-200/50">
+					<Sparkles class="h-4 w-4" />
+					Thailand-First Features
+				</span>
+				<h2 class="font-serif mt-6 text-3xl font-medium text-slate-900 md:text-5xl">
+					Built for <span class="gradient-text">Thai Business</span>
+				</h2>
+				<p class="mx-auto mt-4 max-w-2xl text-slate-600 text-lg">
+					Core features designed specifically for the Thai market, with local language understanding and compliance built-in.
+				</p>
+			</div>
+
+			<!-- Core Features Grid -->
+			<div class="grid gap-6 md:grid-cols-2 lg:gap-8">
+				{#each coreFeatures as feature, i}
+					<div class="group relative rounded-3xl border border-slate-200/60 bg-white/90 backdrop-blur-sm p-8 shadow-sm transition-all duration-300 hover:border-violet-200 hover:shadow-xl hover:shadow-violet-100/50 hover:-translate-y-1">
+						<!-- Badge -->
+						<div class="absolute top-6 right-6">
+							<span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+								<CheckCircle2 class="h-3 w-3 text-emerald-500" />
+								{feature.badge}
+							</span>
+						</div>
+
+						<!-- Icon -->
+						<div class="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br {feature.gradient} text-white shadow-lg {feature.shadow} transition-transform group-hover:scale-110">
+							<feature.icon class="h-7 w-7" />
+						</div>
+
+						<!-- Content -->
+						<h3 class="text-xl font-semibold text-slate-900 mb-3">{feature.title}</h3>
+						<p class="text-slate-600 leading-relaxed">{feature.description}</p>
+
+						<!-- Hover indicator -->
+						<div class="mt-6 flex items-center gap-2 text-sm font-medium text-violet-600 opacity-0 transition-opacity group-hover:opacity-100">
+							Learn more
+							<ArrowRight class="h-4 w-4" />
+						</div>
+					</div>
+				{/each}
+			</div>
+		</div>
+	</section>
+
+	<!-- Quality of Life Features Section -->
+	<section class="relative px-4 py-20 md:py-28 bg-linear-to-b from-violet-50/30 via-white to-slate-50/50">
+		<div class="mx-auto max-w-6xl">
+			<div class="text-center mb-16">
+				<span class="font-mono inline-flex items-center gap-2 rounded-full bg-linear-to-r from-cyan-100 to-blue-100 px-4 py-1.5 text-sm font-medium text-cyan-700 border border-cyan-200/50">
+					<Zap class="h-4 w-4" />
+					Time-to-Value: Under 5 Minutes
+				</span>
+				<h2 class="font-serif mt-6 text-3xl font-medium text-slate-900 md:text-5xl">
+					The <span class="gradient-text">Friction Reducers</span>
+				</h2>
+				<p class="mx-auto mt-4 max-w-2xl text-slate-600 text-lg">
+					Quality of life features that don't change what the tool does — they change how it feels to use.
+				</p>
+			</div>
+
+			<!-- QoL Features - Bento Grid Style -->
+			<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+				{#each qolFeatures as feature, i}
+					<div class="group relative rounded-2xl border border-slate-200/60 bg-white/80 backdrop-blur-sm p-6 shadow-sm transition-all duration-300 hover:border-cyan-200 hover:shadow-lg hover:shadow-cyan-100/50 {i === 1 ? 'md:col-span-2' : ''} {i >= 3 ? 'md:col-span-2' : ''}">
+						<!-- Icon with subtle animation -->
+						<div class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-slate-100 to-slate-50 text-slate-600 ring-1 ring-slate-200/50 transition-all group-hover:from-cyan-100 group-hover:to-blue-50 group-hover:text-cyan-600 group-hover:ring-cyan-200/50">
+							<feature.icon class="h-6 w-6" />
+						</div>
+
+						<h3 class="text-lg font-semibold text-slate-900 mb-2">{feature.title}</h3>
+						<p class="text-sm text-slate-600 leading-relaxed">{feature.description}</p>
+					</div>
+				{/each}
+			</div>
+
+			<!-- CTA Banner -->
+			<div class="mt-16 relative overflow-hidden rounded-3xl bg-linear-to-r from-violet-600 via-purple-600 to-indigo-600 p-8 md:p-12 text-center shadow-2xl shadow-violet-500/25">
+				<!-- Background pattern -->
+				<div class="absolute inset-0 opacity-10">
+					<div class="absolute inset-0" style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.4\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
+				</div>
+
+				<div class="relative">
+					<h3 class="font-serif text-2xl md:text-4xl font-medium text-white mb-4">
+						Ready to get your first 3 leads for free?
+					</h3>
+					<p class="text-violet-100 text-lg mb-8 max-w-xl mx-auto">
+						No credit card required. No account needed. See real results in under 5 minutes.
+					</p>
+					<div class="flex flex-col sm:flex-row gap-4 justify-center">
+						<button class="inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-base font-semibold text-violet-700 shadow-lg transition-all hover:bg-violet-50 hover:shadow-xl hover:scale-105">
+							<Bot class="h-5 w-5" />
+							Try Scout Agent Free
+						</button>
+						<button class="inline-flex items-center justify-center gap-2 rounded-full border-2 border-white/30 bg-white/10 backdrop-blur-sm px-8 py-4 text-base font-semibold text-white transition-all hover:bg-white/20 hover:border-white/50">
+							Watch Demo
+							<ArrowRight class="h-5 w-5" />
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>
