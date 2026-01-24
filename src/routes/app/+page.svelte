@@ -6,9 +6,9 @@
 	let message = $state<string>('');
 
 	async function testGetData() {
-		const response = await fetch('/py/hello');
+		const response = await fetch('/py/protected');
 		const data = await response.json();
-		message = data.message;
+		message = JSON.stringify(data);
 	}
 </script>
 
