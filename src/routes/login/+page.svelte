@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { signInWithGoogle } from '$lib/auth.js';
-	import { auth, user } from '$lib/firebase.svelte.js';
+	import { signInWithGoogle } from '$lib/auth';
+	import { auth, user } from '$lib/firebase.svelte';
 	import { Zap, ArrowLeft, Loader2 } from '@lucide/svelte';
 
 	let loading = $state(false);

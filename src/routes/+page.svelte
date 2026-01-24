@@ -25,7 +25,7 @@
 	} from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
     import { auth, user } from '$lib/firebase.svelte.js';
-	import { signOut } from '$lib/auth.js';
+	import { signOut } from '$lib/auth';
 
 	// Pricing Tiers Data
 	const pricingTiers = [

@@ -1,6 +1,6 @@
-import { adminAuth } from '$lib/server/admin.js';
+import { adminAuth } from '$lib/server/admin';
 import { error, json } from '@sveltejs/kit';
-import type { RequestHandler } from './$types.js';
+import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 
