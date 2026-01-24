@@ -2,7 +2,7 @@
 	"name": "jkj-website",
 	"version": "0.0.1",
 	"scripts": {
-        "fastapi-dev": "uv add -r requirements.txt && python -m uvicorn api.index:app --reload",
+        "fastapi-dev": "pip3 install -r requirements.txt && python3 -m uvicorn api.index:app --reload",
 		"dev": "concurrently \"pnpm run fastapi-dev\" \"vite dev\"",
 		"build": "vite build",
 		"preview": "vite preview",
