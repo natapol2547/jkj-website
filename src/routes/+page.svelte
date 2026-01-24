@@ -228,7 +228,7 @@
                       tabindex="-1"
                       class="menu dropdown-content font-semibold bg-white/80 rounded-box z-1 mt-3 w-52 p-2 shadow">
                       <li>
-                        <a class="justify-between" href="/dashboard">
+                        <a class="justify-between" href="/app">
                           Dashboard
                         </a>
                       </li>

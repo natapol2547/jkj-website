@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { signInWithGoogle } from '$lib/auth.js';
 	import { auth, user } from '$lib/firebase.svelte.js';
