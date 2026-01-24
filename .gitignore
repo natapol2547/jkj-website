@@ -243,3 +243,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Firebase
+credentials.json
+.vercel
+.env*.local

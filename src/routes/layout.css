@@ -20,8 +20,8 @@ html {
 
 body {
 	font-family: var(--font-sans);
-	background-color: #fafbfc;
-	color: #1e293b;
+	/* background-color: #fafbfc;
+	color: #1e293b; */
 }
 
 /* Grid background pattern */

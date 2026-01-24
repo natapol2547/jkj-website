@@ -39,7 +39,7 @@
 	<meta name="description" content="Sign in to Julist V2 to start generating verified leads" />
 </svelte:head>
 
-<div class="min-h-screen bg-grid relative flex items-center justify-center px-4 py-12">
+<div class="min-h-screen bg-grid relative flex items-center justify-center px-4 py-12" data-theme="light">
 	<!-- Background gradient overlay -->
 	<div class="pointer-events-none absolute inset-0 bg-linear-to-br from-violet-50/50 via-transparent to-cyan-50/30"></div>
 

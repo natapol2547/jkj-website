@@ -6,6 +6,17 @@ import {
 } from "firebase/auth";
 import type { AuthError } from "firebase/auth";
 
+async function _setSessionCookie(idToken: string) {
+    return await fetch("/api/v1/signin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // 'CSRF-Token': csrfToken  // HANDLED by sveltekit automatically
+        },
+        body: JSON.stringify({ idToken }),
+    });
+}
+
 /**
  * Sign in with Google using a popup
  * @param auth Firebase Auth instance
@@ -24,6 +35,7 @@ export async function signInWithGoogle(auth: Auth): Promise<User> {
 		});
 
 		const result = await signInWithPopup(auth, provider);
+		await _setSessionCookie(await result.user.getIdToken());
 		return result.user;
 	} catch (error) {
 		const authError = error as AuthError;
@@ -47,6 +59,7 @@ export async function signInWithGoogle(auth: Auth): Promise<User> {
  */
 export async function signOut(auth: Auth): Promise<void> {
 	try {
+        const res = await fetch("/api/v1/signin", { method: "DELETE" });
 		await auth.signOut();
 	} catch (error) {
 		const authError = error as AuthError;

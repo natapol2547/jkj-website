@@ -189,7 +189,7 @@
 	<meta name="description" content="Integrate with your sales and marketing stack in under 30 seconds. Your apps deserve a real relationship without the drama." />
 </svelte:head>
 
-<div class="min-h-screen bg-grid relative">
+<div class="min-h-screen bg-grid bg-[#fafbfc] relative" data-theme="light">
 	<!-- Subtle gradient overlay -->
 	<div class="pointer-events-none absolute inset-0 bg-linear-to-br from-violet-50/50 via-transparent to-cyan-50/30"></div>
 
