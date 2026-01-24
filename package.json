@@ -1,65 +1,35 @@
 {
 	"name": "jkj-website",
+	"private": true,
 	"version": "0.0.1",
+	"type": "module",
 	"scripts": {
-        "fastapi-dev": "pip3 install -r requirements.txt && python3 -m uvicorn api.index:app --reload",
+		"fastapi-dev": "pip install -r requirements.txt && python -m uvicorn api.index:app --reload",
 		"dev": "concurrently \"pnpm run fastapi-dev\" \"vite dev\"",
 		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
-		"prepack": "svelte-kit sync && svelte-package && publint",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"lint": "prettier --check .",
-		"format": "prettier --write ."
-	},
-	"files": [
-		"dist",
-		"!dist/**/*.test.*",
-		"!dist/**/*.spec.*"
-	],
-	"sideEffects": [
-		"**/*.css"
-	],
-	"svelte": "./dist/index.js",
-	"types": "./dist/index.d.ts",
-	"type": "module",
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"svelte": "./dist/index.js"
-		}
-	},
-	"peerDependencies": {
-		"svelte": "^5.0.0"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-vercel": "^6.2.0",
 		"@sveltejs/kit": "^2.49.1",
-		"@sveltejs/package": "^2.5.7",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
 		"@tailwindcss/forms": "^0.5.10",
 		"@tailwindcss/typography": "^0.5.19",
 		"@tailwindcss/vite": "^4.1.17",
-		"concurrently": "^9.1.2",
-		"prettier": "^3.7.4",
-		"prettier-plugin-svelte": "^3.4.0",
-		"prettier-plugin-tailwindcss": "^0.7.2",
-		"publint": "^0.3.15",
 		"svelte": "^5.45.6",
 		"svelte-check": "^4.3.4",
 		"tailwindcss": "^4.1.17",
 		"typescript": "^5.9.3",
 		"vite": "^7.2.6"
 	},
-	"keywords": [
-		"svelte"
-	],
 	"dependencies": {
-		"@lucide/svelte": "^0.562.0",
+		"@lucide/svelte": "^0.563.1",
+		"concurrently": "^9.2.1",
 		"daisyui": "^5.5.14",
 		"firebase": "^12.8.0",
-		"firebase-admin": "^13.6.0",
-		"vercel": "^50.5.0"
+		"firebase-admin": "^13.6.0"
 	}
 }

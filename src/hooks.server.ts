@@ -1,5 +1,5 @@
-import { adminAuth } from "$lib/server/admin.js";
 import type { Handle } from "@sveltejs/kit";
+import { adminAuth } from "$lib/server/admin";
 
 export const handle: Handle = (async ({ event, resolve }) => {
   const sessionCookie = event.cookies.get("__session");
