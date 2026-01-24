@@ -2,12 +2,11 @@
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
-	import { user } from '$lib/firebase.svelte.js';
 	import { goto } from '$app/navigation';
 
 	// Redirect if already signed in
 	$effect(() => {
-		if (!user.current) {
+		if (!data.userID) {
 			goto('/login');
 		}
 	});
