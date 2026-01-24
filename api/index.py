@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 
+# Create the app instance
 app = FastAPI()
 
-@app.get("/api/python")
+# --- Endpoint 1: Simple Hello World ---
+@app.get("/py/hello")
 def hello_world():
     return {"message": "Hello from Python!"}

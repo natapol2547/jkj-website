@@ -6,7 +6,7 @@
     let message = $state<string>('');
 
     async function testGetData() {
-        const response = await fetch('/api/python');
+        const response = await fetch('/py/hello');
         const data = await response.json();
         message = data.message;
     }
