@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { LayoutProps } from './$types.js';
+	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
 	import { user } from '$lib/firebase.svelte.js';
