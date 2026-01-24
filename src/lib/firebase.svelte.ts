@@ -5,6 +5,7 @@ import { getStorage } from "firebase/storage";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { browser } from "$app/environment";
+import { userStore } from "./stores/auth.svelte.ts";
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -26,3 +27,5 @@ export const auth = getAuth(app);
 
 // Analytics is browser-only (requires window)
 export const analytics: Analytics | undefined = browser ? getAnalytics(app) : undefined;
+
+export const user = userStore(auth);

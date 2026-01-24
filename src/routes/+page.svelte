@@ -16,9 +16,83 @@
 		UserPlus,
 		Sparkles,
 		CheckCircle2,
-		Brain
+		Brain,
+		Check,
+		X as XIcon,
+		Crown,
+		Building2,
+		Rocket
 	} from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
+    import { auth, user } from '$lib/firebase.svelte.js';
+	import { signOut } from '$lib/auth.js';
+
+	// Pricing Tiers Data
+	const pricingTiers = [
+		{
+			name: 'Free',
+			price: '฿0',
+			period: 'forever',
+			description: 'Perfect for trying out Julist and small projects',
+			icon: Rocket,
+			gradient: 'from-slate-500 to-slate-600',
+			buttonStyle: 'bg-slate-900 hover:bg-slate-800 text-white',
+			popular: false,
+			features: [
+				{ text: '5 searches per month', included: true },
+				{ text: '10 leads per search', included: true },
+				{ text: 'Basic Thai NLP', included: true },
+				{ text: 'CSV export', included: true },
+				{ text: 'Email support', included: true },
+				{ text: 'Scout Agent access', included: false },
+				{ text: 'Lead verification', included: false },
+				{ text: 'PDPA compliance tools', included: false },
+				{ text: 'AI lead scoring', included: false }
+			]
+		},
+		{
+			name: 'Pro',
+			price: '฿170',
+			period: '/month',
+			description: 'For growing teams who need verified, quality leads',
+			icon: Crown,
+			gradient: 'from-violet-500 to-purple-600',
+			buttonStyle: 'btn-primary-custom text-white',
+			popular: true,
+			features: [
+				{ text: '50 searches per month', included: true },
+				{ text: 'Unlimited leads per search', included: true },
+				{ text: 'Advanced Thai NLP + slang', included: true },
+				{ text: 'CSV & Excel export', included: true },
+				{ text: 'Priority support', included: true },
+				{ text: 'Scout Agent access', included: true },
+				{ text: 'Lead verification', included: true },
+				{ text: 'PDPA compliance tools', included: true },
+				{ text: 'AI lead scoring', included: true }
+			]
+		},
+		{
+			name: 'Enterprise',
+			price: 'Custom',
+			period: '',
+			description: 'For organizations with advanced needs and scale',
+			icon: Building2,
+			gradient: 'from-amber-500 to-orange-600',
+			buttonStyle: 'bg-amber-500 hover:bg-amber-600 text-white',
+			popular: false,
+			features: [
+				{ text: 'Unlimited searches', included: true },
+				{ text: 'Unlimited leads', included: true },
+				{ text: 'Custom NLP training', included: true },
+				{ text: 'API access', included: true },
+				{ text: 'Dedicated account manager', included: true },
+				{ text: 'Custom Scout Agent workflows', included: true },
+				{ text: 'Team collaboration', included: true },
+				{ text: 'Custom PDPA workflows', included: true },
+				{ text: 'SLA guarantee', included: true }
+			]
+		}
+	];
 
 	// Core Features Data
 	const coreFeatures = [
@@ -134,7 +208,6 @@
 			<div class="hidden shrink-0 items-center gap-6 md:flex">
 				<a href="#features" class="font-mono text-sm font-medium text-slate-600 transition-colors hover:text-violet-600 whitespace-nowrap">Features</a>
 				<a href="#pricing" class="font-mono text-sm font-medium text-slate-600 transition-colors hover:text-violet-600 whitespace-nowrap">Pricing</a>
-				<a href="#integrations" class="font-mono text-sm font-medium text-slate-600 transition-colors hover:text-violet-600 whitespace-nowrap">Integrations</a>
 			</div>
 
 			<!-- CTA Buttons -->
@@ -142,11 +215,32 @@
 				<button class="btn-primary-custom hidden rounded-full px-5 py-2.5 text-sm font-semibold text-white md:block whitespace-nowrap">
 					Start Free Pro Trial
 				</button>
-				<a href="#signin" class="hidden items-center gap-1 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:text-violet-600 md:flex whitespace-nowrap">
-					Sign In
-					<ArrowRight class="h-4 w-4 shrink-0" />
-				</a>
-
+                {#if user.current}
+                <div class="dropdown dropdown-end">
+                    <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar">
+                      <div class="w-10 rounded-full">
+                        <img
+                          alt="Tailwind CSS Navbar component"
+                          src={user.current.photoURL} />
+                      </div>
+                    </div>
+                    <ul
+                      tabindex="-1"
+                      class="menu dropdown-content font-semibold bg-white/80 rounded-box z-1 mt-3 w-52 p-2 shadow">
+                      <li>
+                        <a class="justify-between" href="/dashboard">
+                          Dashboard
+                        </a>
+                      </li>
+                      <li><button onclick={() => signOut(auth)} class="text-red-500">Logout</button></li>
+                    </ul>
+                  </div>
+                {:else}
+                    <a href="/login" class="hidden items-center gap-1 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:text-violet-600 md:flex whitespace-nowrap">
+                        Sign In
+                        <ArrowRight class="h-4 w-4 shrink-0" />
+                    </a>
+                {/if}
 				<!-- Mobile menu button -->
 				<button
 					onclick={() => mobileMenuOpen = !mobileMenuOpen}
@@ -297,7 +391,7 @@
 	</section>
 
 	<!-- Features Preview Section -->
-	<section class="relative px-4 py-16 md:py-24">
+	<section id="features" class="relative px-4 py-16 md:py-24">
 		<div class="mx-auto max-w-6xl">
 			<div class="text-center">
 				<span class="font-mono inline-flex items-center gap-2 rounded-full bg-violet-100 px-4 py-1.5 text-sm font-medium text-violet-700">
@@ -454,6 +548,112 @@
 							Watch Demo
 							<ArrowRight class="h-5 w-5" />
 						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<!-- Pricing Section -->
+	<section id="pricing" class="relative px-4 py-20 md:py-32 overflow-hidden">
+		<!-- Background -->
+		<div class="absolute inset-0 bg-linear-to-b from-slate-50/50 via-white to-violet-50/30"></div>
+
+		<div class="relative mx-auto max-w-6xl">
+			<div class="text-center mb-16">
+				<span class="font-mono inline-flex items-center gap-2 rounded-full bg-linear-to-r from-amber-100 to-orange-100 px-4 py-1.5 text-sm font-medium text-amber-700 border border-amber-200/50">
+					<Crown class="h-4 w-4" />
+					Simple Pricing
+				</span>
+				<h2 class="font-serif mt-6 text-3xl font-medium text-slate-900 md:text-5xl">
+					Choose your <span class="gradient-text">plan</span>
+				</h2>
+				<p class="mx-auto mt-4 max-w-2xl text-slate-600 text-lg">
+					Start free, upgrade when you need more. No hidden fees, no surprises.
+				</p>
+			</div>
+
+			<!-- Pricing Cards -->
+			<div class="grid gap-8 md:grid-cols-3">
+				{#each pricingTiers as tier, i}
+					<div class="group relative rounded-3xl border {tier.popular ? 'border-violet-300 bg-white shadow-xl shadow-violet-100/50' : 'border-slate-200/60 bg-white/80'} p-8 transition-all duration-300 hover:shadow-xl {tier.popular ? 'md:-translate-y-2' : 'hover:-translate-y-1'}">
+						<!-- Popular Badge -->
+						{#if tier.popular}
+							<div class="absolute -top-4 left-1/2 -translate-x-1/2">
+								<span class="inline-flex items-center gap-1.5 rounded-full bg-linear-to-r from-violet-600 to-purple-600 px-4 py-1.5 text-sm font-semibold text-white shadow-lg">
+									<Sparkles class="h-4 w-4" />
+									Most Popular
+								</span>
+							</div>
+						{/if}
+
+						<!-- Header -->
+						<div class="text-center mb-8">
+							<div class="mb-4 mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br {tier.gradient} text-white shadow-lg">
+								<tier.icon class="h-7 w-7" />
+							</div>
+							<h3 class="text-xl font-bold text-slate-900">{tier.name}</h3>
+							<div class="mt-4 flex items-baseline justify-center gap-1">
+								<span class="text-4xl font-bold text-slate-900">{tier.price}</span>
+								{#if tier.period}
+									<span class="text-slate-500">{tier.period}</span>
+								{/if}
+							</div>
+							<p class="mt-3 text-sm text-slate-600">{tier.description}</p>
+						</div>
+
+						<!-- Features List -->
+						<ul class="space-y-4 mb-8">
+							{#each tier.features as feature}
+								<li class="flex items-start gap-3">
+									{#if feature.included}
+										<div class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+											<Check class="h-3 w-3" />
+										</div>
+										<span class="text-sm text-slate-700">{feature.text}</span>
+									{:else}
+										<div class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+											<XIcon class="h-3 w-3" />
+										</div>
+										<span class="text-sm text-slate-400">{feature.text}</span>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+
+						<!-- CTA Button -->
+						<button class="w-full rounded-full px-6 py-3.5 text-sm font-semibold transition-all {tier.buttonStyle} {tier.popular ? 'shadow-lg shadow-violet-200/50' : ''}">
+							{#if tier.name === 'Enterprise'}
+								Contact Sales
+							{:else if tier.name === 'Free'}
+								Get Started Free
+							{:else}
+								Start Pro Trial
+							{/if}
+						</button>
+					</div>
+				{/each}
+			</div>
+
+			<!-- FAQ/Trust Section -->
+			<div class="mt-16 text-center">
+				<p class="text-slate-600">
+					<span class="font-semibold text-slate-900">30-day money-back guarantee</span> on all paid plans.
+					<span class="mx-2 text-slate-300">•</span>
+					Cancel anytime, no questions asked.
+				</p>
+				<div class="mt-6 flex flex-wrap items-center justify-center gap-6 text-sm text-slate-500">
+					<div class="flex items-center gap-2">
+						<Shield class="h-4 w-4 text-emerald-500" />
+						PDPA Compliant
+					</div>
+					<div class="flex items-center gap-2">
+						<BadgeCheck class="h-4 w-4 text-blue-500" />
+						Verified Leads
+					</div>
+					<div class="flex items-center gap-2">
+						<Globe class="h-4 w-4 text-violet-500" />
+						Thai Language First
 					</div>
 				</div>
 			</div>
