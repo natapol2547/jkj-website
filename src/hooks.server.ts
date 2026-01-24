@@ -1,4 +1,4 @@
-import { adminAuth } from "$lib/server/admin.js";
+import { adminAuth } from "$lib/server/admin";
 import type { Handle } from "@sveltejs/kit";
 
 export const handle: Handle = (async ({ event, resolve }) => {
