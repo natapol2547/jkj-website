@@ -215,7 +215,7 @@
 
 			<!-- CTA Buttons -->
 			<div class="flex shrink-0 items-center gap-2 md:gap-3">
-				<button class="btn btn-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold text-white md:block whitespace-nowrap">
+				<button class="btn btn-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold md:block whitespace-nowrap">
 					Start Free Pro Trial
 				</button>
                 {#if user.current}
