@@ -1,31 +1,26 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { createAgent } from "langchain";
-import { MemorySaver } from '@langchain/langgraph';
-import type { BaseMessage } from '@langchain/core/messages';
-import { HumanMessage } from '@langchain/core/messages';
+import { MongoDBSaver } from "@langchain/langgraph-checkpoint-mongodb";
+import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages';
+import { MessagesAnnotation } from '@langchain/langgraph';
 import { companySearchTool } from '../tools/companySearchTool';
 import { OPENROUTER_API_KEY } from '$env/static/private';
-
-// Memory checkpointer for conversation history
-const checkpointer = new MemorySaver();
+import { client } from '../mongo';
 
 // System prompt for the search agent
-const SYSTEM_PROMPT = `You are Julist AI, an intelligent assistant specialized in helping users find and research Thai companies.
+const SYSTEM_PROMPT = `You are Julist AI, a Thai company search assistant.
 
-Your capabilities:
-- Search for companies by name, industry, location, or business description
-- Find companies similar to a concept or business idea
-- Filter results by operating status, entity type, location, or business domain
-- Provide detailed company information including contact details
+Use company_search tool to find companies. Put main intent in query, only add filters when user explicitly asks.
 
-When searching:
-1. Use the company_search tool to find relevant companies
-2. Analyze the results and present them clearly to the user
-3. Highlight key information like company name, location, industry, and contact details
-4. If the search returns no results, suggest alternative search terms or filters
+Filter values:
+- operating_status: "ยังดำเนินกิจการอยู่" (active), "เลิก" (closed), "ล้มละลาย" (bankrupt)
+- type_of_entity: "บริษัทจำกัด", "บริษัทมหาชนจำกัด", "ห้างหุ้นส่วนจำกัด"
+- location: Thai province name (e.g., "กรุงเทพมหานคร", "เชียงใหม่")
 
-Always be helpful, accurate, and provide actionable information about Thai businesses.
-Respond in the same language as the user's query (Thai or English).`;
+Respond in user's language (Thai/English). Use Markdown.`;
+
+// Memory checkpointer for conversation history
+const checkpointer = new MongoDBSaver({ client: client as any, dbName: 'conversation_history' });
 
 /**
  * Create the search agent with the company search tool
@@ -109,7 +104,7 @@ export async function streamSearchAgent(options: SearchAgentOptions) {
 	// Stream the agent response
 	const stream = await agent.stream(input, {
 		...config,
-		streamMode: 'values'
+		streamMode: ['values', 'messages']
 	});
 
 	return stream;

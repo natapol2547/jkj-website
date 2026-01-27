@@ -24,8 +24,81 @@
 		Bookmark,
 		Download
 	} from '@lucide/svelte';
+    import { Chat } from '@ai-sdk/svelte';
+    import { DefaultChatTransport } from 'ai';
+	import { marked } from 'marked';
+	import DOMPurify from 'dompurify';
+
+	// Configure marked to allow HTML (for Tailwind/DaisyUI styled content)
+	marked.setOptions({
+		breaks: true,
+		gfm: true
+	});
+
+	/**
+	 * Parse markdown and sanitize HTML for safe rendering
+	 * Allows Tailwind CSS classes and DaisyUI components
+	 */
+	function parseMarkdown(content: string): string {
+		// First parse markdown to HTML
+		const html = marked(content) as string;
+		
+		// Sanitize HTML but allow safe classes and elements
+		const sanitized = DOMPurify.sanitize(html, {
+			ALLOWED_TAGS: [
+				'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+				'p', 'br', 'hr',
+				'ul', 'ol', 'li',
+				'strong', 'em', 'b', 'i', 'u', 's', 'del', 'ins',
+				'a', 'code', 'pre', 'blockquote',
+				'table', 'thead', 'tbody', 'tr', 'th', 'td',
+				'span', 'div',
+				'img'
+			],
+			ALLOWED_ATTR: [
+				'class', 'href', 'target', 'rel', 'src', 'alt', 'title',
+				'id', 'name', 'style'
+			],
+			// Allow data attributes for potential future use
+			ALLOW_DATA_ATTR: true,
+			// Allow class attributes with any value (for Tailwind classes)
+			ADD_ATTR: ['class']
+		});
+		
+		return sanitized;
+	}
 
 	let { data }: PageProps = $props();
+
+	// Types for parsed company data
+	interface CompanyResult {
+		rank: number;
+		document_id: string;
+		company_id: string;
+		name: string;
+		businessdomain: string;
+		location: {
+			type: string;
+			coordinates: [number, number];
+		};
+		operating_status: string;
+		type_of_entity: string;
+		website: string;
+		phone: string;
+		email: string;
+		relevance_score: number;
+		match_type: string;
+        address: string;
+	}
+
+	interface SearchOutput {
+		success: boolean;
+		query: string;
+		searchType: string;
+		totalResults: number;
+		executionTimeMs: number;
+		results: CompanyResult[];
+	}
 
 	// State
 	let searchQuery = $state('');
@@ -33,17 +106,59 @@
 	let hasSearched = $state(false);
 	let currentQuery = $state('');
 
+    const chat = new Chat({ transport: new DefaultChatTransport({ api: '/api/v1/search' })});
+
+    function handleSubmit(event: MouseEvent | SubmitEvent) {
+        event.preventDefault();
+        chat.sendMessage({ text: searchQuery });
+        searchQuery = '';
+    }
+
+	// Derived state to extract company results from dynamic-tool parts
+	const companySearchResults = $derived.by(() => {
+		const messages = chat.messages;
+		if (!messages.length) return null;
+
+		// Find the last assistant message
+		const lastAssistantMessage = [...messages].reverse().find(m => m.role === 'assistant');
+		if (!lastAssistantMessage) return null;
+
+		// Find dynamic-tool parts with company_search
+		for (const part of lastAssistantMessage.parts) {
+			if (part.type === 'dynamic-tool' && 
+				part.toolName === 'company_search' && 
+				part.state === 'output-available' &&
+				part.output) {
+				try {
+					const output: SearchOutput = JSON.parse(part.output as string);
+					if (output.success && output.results) {
+						return {
+							query: output.query,
+							searchType: output.searchType,
+							totalResults: output.totalResults,
+							executionTimeMs: output.executionTimeMs,
+							results: output.results
+						};
+					}
+				} catch (e) {
+					console.error('Failed to parse company search output:', e);
+				}
+			}
+		}
+		return null;
+	});
+
 	// Mock data for demonstration
 	let searchResults = $state<any[]>([]);
 	let aiResponse = $state('');
 
 	// Suggested searches
 	const suggestedSearches = [
-		'Find tech startups in Bangkok',
-		'Hotels near Phuket beach',
-		'Manufacturing companies in Rayong',
-		'Restaurant suppliers in Chiang Mai',
-		'Fintech companies in Thailand'
+		'บริษัทเทคโนโลยีในกรุงเทพ',
+		'โรงแรมใกล้ชายหาดภูเก็ต',
+		'บริษัทผลิตอุตสาหกรรมในระยอง',
+		'ผู้ประกอบกิจการร้านอาหารในเชียงใหม่',
+		'ธนาคารออมสิน'
 	];
 
 	// Recent searches (mock)
@@ -131,25 +246,25 @@
 
 Would you like me to filter by specific criteria such as company size, industry sub-sector, or location?`;
 
-	async function handleSearch() {
-		if (!searchQuery.trim()) return;
+	// async function handleSearch() {
+	// 	if (!searchQuery.trim()) return;
 
-		isSearching = true;
-		currentQuery = searchQuery;
+	// 	isSearching = true;
+	// 	currentQuery = searchQuery;
 
-		// Simulate API call
-		await new Promise((resolve) => setTimeout(resolve, 1500));
+	// 	// Simulate API call
+	// 	await new Promise((resolve) => setTimeout(resolve, 1500));
 
-		searchResults = mockCompanies;
-		aiResponse = mockAiResponse;
-		hasSearched = true;
-		isSearching = false;
-		searchQuery = '';
-	}
+	// 	searchResults = mockCompanies;
+	// 	aiResponse = mockAiResponse;
+	// 	hasSearched = true;
+	// 	isSearching = false;
+	// 	searchQuery = '';
+	// }
 
-	function handleSuggestedSearch(query: string) {
+	function handleSuggestedSearch(event: MouseEvent, query: string) {
 		searchQuery = query;
-		handleSearch();
+		handleSubmit(event);
 	}
 
 	function resetSearch() {
@@ -165,7 +280,7 @@ Would you like me to filter by specific criteria such as company size, industry 
 </svelte:head>
 
 <div class="flex h-[calc(100vh-64px)] flex-col bg-[#0f0f0f]" data-theme="dark">
-	{#if !hasSearched}
+	{#if !chat.messages.length}
 		<!-- Initial Search State -->
 		<div class="flex flex-1 flex-col items-center justify-center px-4" in:fade={{ duration: 300 }}>
 			<!-- Logo and Welcome -->
@@ -183,19 +298,22 @@ Would you like me to filter by specific criteria such as company size, industry 
 
 			<!-- Search Input -->
 			<div class="w-full max-w-2xl">
-				<form onsubmit={(e) => { e.preventDefault(); handleSearch(); }}>
+				<form onsubmit={(e) => { e.preventDefault(); handleSubmit(e); }}>
 					<div class="group relative">
 						<div class="absolute inset-0 rounded-2xl bg-linear-to-r from-violet-600/20 to-purple-600/20 blur-xl transition-opacity group-focus-within:opacity-100 opacity-0"></div>
 						<div class="relative flex items-center gap-3 rounded-2xl border border-slate-700/50 bg-[#1a1a1a] px-4 py-3 transition-all focus-within:border-violet-500/50 focus-within:ring-2 focus-within:ring-violet-500/20">
-							<button type="button" class="shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-700/50 hover:text-white">
-								<Plus class="h-5 w-5" />
-							</button>
-							<input
-								type="text"
-								bind:value={searchQuery}
-								placeholder="Ask anything about Thai businesses..."
-								class="flex-1 bg-transparent text-white placeholder-slate-500 outline-none! border-none focus:outline-none! focus:ring-0 focus:border-none"
-							/>
+							<div class="flex-1 flex items-center">
+                                <button type="button" class="shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-700/50 hover:text-white">
+                                    <Plus class="h-5 w-5" />
+                                </button>
+                                <input
+                                    type="text"
+                                    bind:value={searchQuery}
+                                    placeholder="Ask anything about Thai businesses..."
+                                    class="flex-1 bg-transparent text-white placeholder-slate-500 outline-none! border-none focus:outline-none! focus:ring-0 focus:border-none"
+                                />
+                            </div>
+                            
 							<button type="button" class="shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-700/50 hover:text-white">
 								<Mic class="h-5 w-5" />
 							</button>
@@ -216,7 +334,7 @@ Would you like me to filter by specific criteria such as company size, industry 
 					<div class="flex flex-wrap gap-2">
 						{#each suggestedSearches as suggestion}
 							<button
-								onclick={() => handleSuggestedSearch(suggestion)}
+								onclick={(e) => handleSuggestedSearch(e, suggestion)}
 								class="rounded-full border border-slate-700/50 bg-[#1a1a1a] px-4 py-2 text-sm text-slate-300 transition-all hover:border-violet-500/50 hover:bg-violet-500/10 hover:text-white"
 							>
 								{suggestion}
@@ -235,7 +353,7 @@ Would you like me to filter by specific criteria such as company size, industry 
 						<div class="space-y-2">
 							{#each recentSearches as recent}
 								<button
-									onclick={() => handleSuggestedSearch(recent.query)}
+									onclick={(e) => handleSuggestedSearch(e, recent.query)}
 									class="flex w-full items-center justify-between rounded-xl border border-slate-800/50 bg-[#141414] px-4 py-3 text-left transition-all hover:border-slate-700 hover:bg-[#1a1a1a]"
 								>
 									<span class="text-slate-300">{recent.query}</span>
@@ -255,63 +373,75 @@ Would you like me to filter by specific criteria such as company size, industry 
 				<!-- Scrollable Content -->
 				<div class="flex-1 overflow-y-auto px-4 py-6 md:px-8">
 					<!-- Current Query Pill -->
-					<div class="mb-6 flex items-center gap-3">
-						<button
-							onclick={resetSearch}
-							class="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-						>
-							<X class="h-5 w-5" />
-						</button>
-						<div class="inline-flex items-center gap-2 rounded-full bg-[#1a1a1a] border border-slate-700/50 px-4 py-2">
-							<Search class="h-4 w-4 text-slate-400" />
-							<span class="text-white">{currentQuery}</span>
-						</div>
-					</div>
+                    {#each chat.messages as message, messageIndex (messageIndex)}
+                        {#if message.role === 'user'}
+                            {@const messageText = message.parts[0]?.type === 'text' ? message.parts[0]?.text : ''}
+                            <div class="mb-6 flex items-center justify-end gap-3">
+                                <!-- <button
+                                    onclick={resetSearch}
+                                    class="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+                                >
+                                    <X class="h-5 w-5" />
+                                </button> -->
+                                <div class="inline-flex items-center gap-2 rounded-full bg-[#1a1a1a] border border-slate-700/50 px-4 py-2">
+                                    <Search class="h-4 w-4 text-slate-400" />
+                                    <span class="text-white">{messageText}</span>
+                                </div>
+                            </div>
+                        {/if}
+                        
+                        {#if message.role === 'assistant'}
+                            <!-- AI Response -->
+                            <div class="max-w-3xl">
+                                <div class="prose prose-invert prose-headings:pt-0 max-w-none" in:fly={{ y: 20, duration: 400 }}>
+                                    <div class="flex items-start gap-3 mb-4">
+                                        <div class="shrink-0 rounded-xl bg-linear-to-br from-violet-600 to-purple-700 p-2.5 mt-4">
+                                            <Bot class="h-5 w-5 text-white" />
+                                        </div>
+                                        <div class="flex-1 w-full overflow-y-auto">
+                                            <div class="text-slate-300 leading-relaxed space-y-3">
+                                                {#each message.parts as part, partIndex (partIndex)}
+                                                    {#if part.type === 'text'}
+                                                        {@html parseMarkdown(part.text)}
+                                                    {/if}
+                                                {/each}
+                                                {#if chat.status === 'submitted' || chat.status === 'streaming'}
+                                                    <span class="loading loading-ball loading-md mt-6"></span>
+                                                {/if}
+                                            </div>
+                                        </div>
+                                    </div>
 
-					<!-- AI Response -->
-					<div class="max-w-3xl">
-						{#if isSearching}
-							<div class="flex items-center gap-3 text-slate-400">
-								<div class="flex gap-1">
-									<span class="h-2 w-2 rounded-full bg-violet-500 animate-bounce" style="animation-delay: 0ms"></span>
-									<span class="h-2 w-2 rounded-full bg-violet-500 animate-bounce" style="animation-delay: 150ms"></span>
-									<span class="h-2 w-2 rounded-full bg-violet-500 animate-bounce" style="animation-delay: 300ms"></span>
-								</div>
-								<span>Searching across Thai business databases...</span>
-							</div>
-						{:else}
-							<div class="prose prose-invert max-w-none" in:fly={{ y: 20, duration: 400 }}>
-								<div class="flex items-start gap-3 mb-4">
-									<div class="shrink-0 rounded-xl bg-linear-to-br from-violet-600 to-purple-700 p-2.5">
-										<Bot class="h-5 w-5 text-white" />
-									</div>
-									<div class="flex-1">
-										<p class="text-sm text-slate-400 mb-2">Julist AI</p>
-										<div class="text-slate-300 leading-relaxed space-y-3">
-											{@html aiResponse}
-										</div>
-									</div>
-								</div>
+                                    <!-- Action Buttons -->
+                                    <!-- <div class="mt-6 flex flex-wrap gap-2">
+                                        <button class="inline-flex items-center gap-2 rounded-lg border border-slate-700/50 bg-[#1a1a1a] px-4 py-2 text-sm text-slate-300 transition-all hover:border-violet-500/50 hover:bg-violet-500/10">
+                                            <Download class="h-4 w-4" />
+                                            Export Results
+                                        </button>
+                                        <button class="inline-flex items-center gap-2 rounded-lg border border-slate-700/50 bg-[#1a1a1a] px-4 py-2 text-sm text-slate-300 transition-all hover:border-violet-500/50 hover:bg-violet-500/10">
+                                            <Bookmark class="h-4 w-4" />
+                                            Save Search
+                                        </button>
+                                    </div> -->
+                                </div>
+                            </div>
+                        {/if}
+                    {/each}
 
-								<!-- Action Buttons -->
-								<div class="mt-6 flex flex-wrap gap-2">
-									<button class="inline-flex items-center gap-2 rounded-lg border border-slate-700/50 bg-[#1a1a1a] px-4 py-2 text-sm text-slate-300 transition-all hover:border-violet-500/50 hover:bg-violet-500/10">
-										<Download class="h-4 w-4" />
-										Export Results
-									</button>
-									<button class="inline-flex items-center gap-2 rounded-lg border border-slate-700/50 bg-[#1a1a1a] px-4 py-2 text-sm text-slate-300 transition-all hover:border-violet-500/50 hover:bg-violet-500/10">
-										<Bookmark class="h-4 w-4" />
-										Save Search
-									</button>
-								</div>
-							</div>
-						{/if}
-					</div>
+                    {#if chat.status === 'submitted'}
+                        <div class="flex items-center gap-3 text-slate-400">
+                            <div class="flex gap-1">
+                                <span class="h-2 w-2 rounded-full bg-violet-500 animate-bounce" style="animation-delay: 0ms"></span>
+                                <span class="h-2 w-2 rounded-full bg-violet-500 animate-bounce" style="animation-delay: 150ms"></span>
+                                <span class="h-2 w-2 rounded-full bg-violet-500 animate-bounce" style="animation-delay: 300ms"></span>
+                            </div>
+                            <span>Searching across Thai business databases...</span>
+                        </div>
+                    {/if}
 				</div>
-
 				<!-- Bottom Search Input -->
 				<div class="border-t border-slate-800/50 bg-[#0f0f0f] px-4 py-4 md:px-8">
-					<form onsubmit={(e) => { e.preventDefault(); handleSearch(); }} class="max-w-3xl">
+					<form onsubmit={(e) => { e.preventDefault(); handleSubmit(e); }} class="w-full">
 						<div class="flex items-center gap-3 rounded-2xl border border-slate-700/50 bg-[#1a1a1a] px-4 py-3 transition-all focus-within:border-violet-500/50">
 							<button type="button" class="shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-700/50 hover:text-white">
 								<Plus class="h-5 w-5" />
@@ -320,7 +450,7 @@ Would you like me to filter by specific criteria such as company size, industry 
 								type="text"
 								bind:value={searchQuery}
 								placeholder="Ask a follow-up question..."
-								class="flex-1 bg-transparent text-white placeholder-slate-500 outline-none! border-none focus:outline-none! focus:ring-0 focus:border-none"
+								class="flex-1 bg-transparent text-white placeholder-slate-500 outline-none! border-none focus:outline-none! focus:ring-0 focus:border-none min-w-0 max-w-full"
 							/>
 							<button type="button" class="shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-700/50 hover:text-white">
 								<Mic class="h-5 w-5" />
@@ -340,72 +470,127 @@ Would you like me to filter by specific criteria such as company size, industry 
 			<!-- Right Sidebar - Company Results -->
 			<div class="hidden w-96 shrink-0 border-l border-slate-800/50 bg-[#0a0a0a] overflow-y-auto lg:block">
 				<div class="p-4">
-					<!-- Header -->
-					<div class="flex items-center justify-between mb-4">
-						<div class="flex items-center gap-2">
-							<Building2 class="h-4 w-4 text-slate-400" />
-							<span class="text-sm font-medium text-slate-300">{searchResults.length} companies found</span>
-						</div>
-						<button class="text-xs text-violet-400 hover:text-violet-300">
-							View all
-						</button>
-					</div>
-
-					<!-- Company Cards -->
-					<div class="space-y-3">
-						{#each searchResults as company, i}
-							<div
-								class="group rounded-xl border border-slate-800/50 bg-[#141414] p-4 transition-all hover:border-slate-700 hover:bg-[#1a1a1a] cursor-pointer"
-								in:fly={{ y: 20, duration: 300, delay: i * 100 }}
-							>
-								<div class="flex items-start justify-between mb-2">
-									<div class="flex-1">
-										<div class="flex items-center gap-2">
-											<h3 class="font-medium text-white text-sm line-clamp-1">{company.name}</h3>
-											{#if company.verified}
-												<span class="shrink-0 rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-400">
-													Verified
-												</span>
-											{/if}
-										</div>
-										<p class="text-xs text-slate-500 mt-1">{company.industry}</p>
-									</div>
-									<div class="shrink-0 ml-2">
-										<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-linear-to-br from-violet-600/20 to-purple-600/20">
-											<span class="text-sm font-semibold text-violet-400">{company.score}</span>
-										</div>
-									</div>
-								</div>
-
-								<p class="text-xs text-slate-400 line-clamp-2 mb-3">{company.description}</p>
-
-								<div class="space-y-1.5 text-xs text-slate-500">
-									<div class="flex items-center gap-2">
-										<MapPin class="h-3 w-3" />
-										<span>{company.location}</span>
-									</div>
-									<div class="flex items-center gap-2">
-										<Users class="h-3 w-3" />
-										<span>{company.employees} employees</span>
-									</div>
-									<div class="flex items-center gap-2">
-										<Globe class="h-3 w-3" />
-										<span class="text-violet-400 hover:underline">{company.website}</span>
-									</div>
-								</div>
-
-								<!-- Hover Actions -->
-								<div class="mt-3 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-									<button class="flex-1 rounded-lg bg-violet-600/20 py-1.5 text-xs font-medium text-violet-400 transition-colors hover:bg-violet-600/30">
-										View Details
-									</button>
-									<button class="rounded-lg bg-slate-700/50 p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white">
-										<ExternalLink class="h-3.5 w-3.5" />
-									</button>
-								</div>
+					{#if companySearchResults}
+						<!-- Header -->
+						<div class="flex items-center justify-between mb-4">
+							<div class="flex items-center gap-2">
+								<Building2 class="h-4 w-4 text-slate-400" />
+								<span class="text-sm font-medium text-slate-300">{companySearchResults.totalResults} companies found</span>
 							</div>
-						{/each}
-					</div>
+							<div class="flex items-center gap-3">
+								<span class="text-xs text-slate-500">{companySearchResults.executionTimeMs}ms</span>
+								<button class="text-xs text-violet-400 hover:text-violet-300">
+									Export
+								</button>
+							</div>
+						</div>
+
+						<!-- Company Cards -->
+						<div class="space-y-3">
+							{#each companySearchResults.results as company, i}
+								{@const isActive = company.operating_status === 'ยังดำเนินกิจการอยู่'}
+								<div
+									class="group rounded-xl border border-slate-800/50 bg-[#141414] p-4 transition-all hover:border-slate-700 hover:bg-[#1a1a1a] cursor-pointer"
+									in:fly={{ y: 20, duration: 300, delay: i * 50 }}
+								>
+									<div class="flex items-start justify-between mb-2">
+										<div class="flex-1 min-w-0">
+											<div class="flex items-center gap-2 flex-wrap">
+												<h3 class="font-medium text-white text-sm line-clamp-1">{company.name}</h3>
+												{#if isActive}
+													<span class="shrink-0 rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-400">
+														ดำเนินกิจการ
+													</span>
+												{:else}
+													<span class="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-400">
+														{company.operating_status}
+													</span>
+												{/if}
+											</div>
+											<p class="text-xs text-slate-500 mt-1">{company.type_of_entity}</p>
+										</div>
+										<div class="shrink-0 ml-2">
+											<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-linear-to-br from-violet-600/20 to-purple-600/20">
+												<span class="text-xs font-semibold text-violet-400">#{company.rank}</span>
+											</div>
+										</div>
+									</div>
+
+									<p class="text-xs text-slate-400 line-clamp-2 mb-3">{company.businessdomain}</p>
+
+									<div class="space-y-1.5 text-xs text-slate-500">
+										{#if company.address && company.address !== 'N/A'}
+											<div class="overflow-hidden">
+												<p class="truncate">{company.address}</p>
+											</div>
+											<div class="flex items-center gap-2">
+												<MapPin class="h-3 w-3 shrink-0" />
+												<a 
+													href="https://www.google.com/maps/search/?api=1&query={encodeURIComponent(company.name + ' ' + company.address)}" 
+													target="_blank" 
+													rel="noopener noreferrer"
+													class="text-violet-400 hover:underline"
+												>
+													ดูแผนที่
+												</a>
+											</div>
+										{/if}
+										{#if company.phone && company.phone !== 'N/A'}
+											<div class="flex items-center gap-2">
+												<Phone class="h-3 w-3 shrink-0" />
+												<a href="tel:{company.phone}" class="hover:text-violet-400 transition-colors">{company.phone}</a>
+											</div>
+										{/if}
+										{#if company.email && company.email !== 'N/A'}
+											<div class="flex items-center gap-2">
+												<Mail class="h-3 w-3 shrink-0" />
+												<a href="mailto:{company.email}" class="text-violet-400 hover:underline truncate">{company.email}</a>
+											</div>
+										{/if}
+										{#if company.website && company.website !== 'N/A'}
+											<div class="flex items-center gap-2">
+												<Globe class="h-3 w-3 shrink-0" />
+												<a href="https://{company.website}" target="_blank" rel="noopener noreferrer" class="text-violet-400 hover:underline truncate">{company.website}</a>
+											</div>
+										{/if}
+									</div>
+
+									<!-- Relevance Score & Match Type -->
+									<div class="mt-3 flex items-center justify-between">
+										<div class="flex items-center gap-2">
+											<span class="text-xs text-slate-500">Relevance: {(company.relevance_score * 100).toFixed(1)}%</span>
+											<span class="text-xs px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-400">{company.match_type}</span>
+										</div>
+									</div>
+
+									<!-- Hover Actions -->
+									<div class="mt-3 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+										<a 
+											href="/app/company/{company.document_id}" 
+											class="flex-1 rounded-lg bg-violet-600/20 py-1.5 text-xs font-medium text-violet-400 transition-colors hover:bg-violet-600/30 text-center"
+										>
+											View Details
+										</a>
+										<a 
+											href="/app/company/{company.document_id}" 
+											target="_blank"
+											rel="noopener noreferrer"
+											class="rounded-lg bg-slate-700/50 p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
+										>
+											<ExternalLink class="h-3.5 w-3.5" />
+										</a>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{:else}
+						<!-- Empty State -->
+						<div class="flex flex-col items-center justify-center py-12 text-center">
+							<Building2 class="h-12 w-12 text-slate-600 mb-4" />
+							<p class="text-sm text-slate-500">No company results yet</p>
+							<p class="text-xs text-slate-600 mt-1">Search results will appear here</p>
+						</div>
+					{/if}
 				</div>
 			</div>
 		</div>

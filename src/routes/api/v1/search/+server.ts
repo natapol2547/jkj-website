@@ -2,6 +2,8 @@ import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
 import { runSearchAgent, streamSearchAgent } from '$lib/server/agents/searchAgent';
 import type { AIMessage } from '@langchain/core/messages';
+import { createUIMessageStreamResponse, type UIMessage } from 'ai';
+import { toBaseMessages, toUIMessageStream } from '@ai-sdk/langchain';
 
 /**
  * POST /api/v1/search
@@ -27,87 +29,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
 		const body = await request.json();
 
-		// Validate request
-		if (!body.query || typeof body.query !== 'string') {
-			return json(
-				{ error: 'Missing or invalid query parameter' },
-				{ status: 400 }
-			);
-		}
+		const { messages, threadId }: { messages: UIMessage[], threadId: string } = body;
 
-		const { query, threadId, stream = false } = body;
+            const lastMessage = messages[messages.length - 1];
+        const query = lastMessage.parts[0]?.type === 'text' ? lastMessage.parts[0]?.text : '';
 
 		// Generate a unique thread ID if not provided (use user ID for persistence)
 		const conversationThreadId = threadId || `user_${locals.userID}_${Date.now()}`;
 
-		if (stream) {
-			// Streaming response
-			const agentStream = await streamSearchAgent({
-				query,
-				threadId: conversationThreadId
-			});
+        // Test stream
+        const agentStream = await streamSearchAgent({
+            query,
+            threadId: conversationThreadId
+        });
 
-			// Convert to readable stream for SSE
-			const encoder = new TextEncoder();
-			const readable = new ReadableStream({
-				async start(controller) {
-					try {
-						for await (const chunk of agentStream) {
-							const messages = chunk.messages;
-							if (messages && messages.length > 0) {
-								const lastMessage = messages[messages.length - 1];
-								if (lastMessage && 'content' in lastMessage) {
-									const data = JSON.stringify({
-										type: 'message',
-										content: lastMessage.content,
-										role: lastMessage._getType()
-									});
-									controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-								}
-							}
-						}
-						controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-						controller.close();
-					} catch (error) {
-						const errorMessage = error instanceof Error ? error.message : 'Stream error';
-						controller.enqueue(
-							encoder.encode(`data: ${JSON.stringify({ type: 'error', error: errorMessage })}\n\n`)
-						);
-						controller.close();
-					}
-				}
-			});
-
-			return new Response(readable, {
-				headers: {
-					'Content-Type': 'text/event-stream',
-					'Cache-Control': 'no-cache',
-					Connection: 'keep-alive'
-				}
-			});
-		} else {
-			// Non-streaming response
-			const result = await runSearchAgent({
-				query,
-				threadId: conversationThreadId
-			});
-
-			// Extract the final AI response
-			const messages = result.messages || [];
-			const lastAIMessage = messages
-				.slice()
-				.reverse()
-				.find((msg: { _getType: () => string }) => msg._getType() === 'ai') as AIMessage | undefined;
-
-			const response = lastAIMessage?.content || 'No response generated';
-
-			return json({
-				success: true,
-				threadId: conversationThreadId,
-				response: typeof response === 'string' ? response : JSON.stringify(response),
-				messageCount: messages.length
-			});
-		}
+        return createUIMessageStreamResponse({
+            stream: toUIMessageStream(agentStream),
+        });
 	} catch (error) {
 		console.error('Search API error:', error);
 		return json(

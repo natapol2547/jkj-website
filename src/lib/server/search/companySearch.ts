@@ -1,5 +1,6 @@
 import { connectToMongo, getCompaniesCollection } from '../mongo';
 import { getEmbedding } from '../embeddings';
+import { getLocationCoordinates, DEFAULT_LOCATION } from '../maps';
 import type {
 	Company,
 	CompanySearchResult,
@@ -9,17 +10,11 @@ import type {
 } from '../types/company';
 
 // Atlas Search index names
-const TEXT_SEARCH_INDEX_NAME = 'default'; // Change this to your actual search index name
+const TEXT_SEARCH_INDEX_NAME = 'company_text_search';
 const VECTOR_INDEX_NAME = 'mission_vector_index';
 
 // RRF constant (standard value)
 const RRF_K = 60;
-
-// Default location: Bangkok coordinates
-const DEFAULT_LOCATION = {
-	lat: 13.7563,
-	lng: 100.5018
-};
 
 // Default search radius in meters (50km)
 const DEFAULT_SEARCH_RADIUS_METERS = 50000;
@@ -27,42 +22,46 @@ const DEFAULT_SEARCH_RADIUS_METERS = 50000;
 /**
  * Build Atlas Search compound filter clauses from search filters
  * For use with $search aggregation
+ * Updated to use 'text' operator for string-indexed fields
+ * @param filters - The search filters
+ * @param locationCoords - Pre-resolved location coordinates (if location filter is used)
  */
-function buildSearchFilterClauses(filters?: CompanySearchFilters): any[] {
+function buildSearchFilterClauses(
+	filters?: CompanySearchFilters,
+	locationCoords?: { lat: number; lng: number }
+): any[] {
 	if (!filters) return [];
 
 	const filterClauses: any[] = [];
 
-	// Token fields use 'equals' operator
+	// String fields use 'text' operator for fuzzy matching
 	if (filters.operating_status) {
 		filterClauses.push({
-			equals: {
-				path: 'operating_status',
-				value: filters.operating_status
+			text: {
+				query: filters.operating_status,
+				path: 'operating_status'
 			}
 		});
 	}
 
 	if (filters.type_of_entity) {
 		filterClauses.push({
-			equals: {
-				path: 'type_of_entity',
-				value: filters.type_of_entity
+			text: {
+				query: filters.type_of_entity,
+				path: 'type_of_entity'
 			}
 		});
 	}
 
 	// Geo filter for location (using geoWithin with circle)
-	if (filters.location) {
-		// For now, we use default Bangkok coordinates
-		// Later this can be replaced with geocoded coordinates from Google Maps API
+	if (filters.location && locationCoords) {
 		filterClauses.push({
 			geoWithin: {
 				path: 'location',
 				circle: {
 					center: {
 						type: 'Point',
-						coordinates: [DEFAULT_LOCATION.lng, DEFAULT_LOCATION.lat]
+						coordinates: [locationCoords.lng, locationCoords.lat]
 					},
 					radius: DEFAULT_SEARCH_RADIUS_METERS
 				}
@@ -77,6 +76,9 @@ function buildSearchFilterClauses(filters?: CompanySearchFilters): any[] {
  * Build MongoDB aggregation filter for vector search pre-filtering
  * Note: Vector search only supports simple operators ($eq, $in, $gt, $lt, etc.)
  * Geo filtering is NOT supported in vector search pre-filter
+ * 
+ * For string fields, we use $regex for partial matching since vector search
+ * doesn't support Atlas Search operators
  */
 function buildVectorSearchFilter(filters?: CompanySearchFilters): Record<string, unknown> | undefined {
 	if (!filters) return undefined;
@@ -84,11 +86,13 @@ function buildVectorSearchFilter(filters?: CompanySearchFilters): Record<string,
 	const filter: Record<string, unknown> = {};
 
 	if (filters.operating_status) {
-		filter.operating_status = { $eq: filters.operating_status };
+		// Use regex for partial matching on operating_status
+		filter.operating_status = { $regex: filters.operating_status, $options: 'i' };
 	}
 
 	if (filters.type_of_entity) {
-		filter.type_of_entity = { $eq: filters.type_of_entity };
+		// Use regex for partial matching on type_of_entity
+		filter.type_of_entity = { $regex: filters.type_of_entity, $options: 'i' };
 	}
 
 	// Note: Location/geo filtering is NOT supported in vector search pre-filter
@@ -109,7 +113,14 @@ export async function fullTextSearch(
 	await connectToMongo();
 	const collection = getCompaniesCollection();
 
-	const filterClauses = buildSearchFilterClauses(filters);
+	// Pre-fetch location coordinates if location filter is specified
+	let locationCoords: { lat: number; lng: number } | undefined;
+	if (filters?.location) {
+		locationCoords = await getLocationCoordinates(filters.location);
+		console.log(`Geocoded "${filters.location}" to:`, locationCoords);
+	}
+
+	const filterClauses = buildSearchFilterClauses(filters, locationCoords);
 
 	// Build the $search stage with compound query
 	const searchStage: any = {
@@ -322,7 +333,7 @@ function determineSearchType(query: string, filters?: CompanySearchFilters): 'fu
 	}
 
 	// Longer, more descriptive queries benefit from semantic search
-	if (words.length >= 5) {
+	if (words.length >= 15) {
 		return 'hybrid';
 	}
 

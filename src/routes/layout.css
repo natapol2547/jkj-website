@@ -3,6 +3,7 @@
 @plugin '@tailwindcss/typography';
 @plugin "daisyui";
 
+@source inline('text-{primary,secondary,accent,neutral,info,success,warning,error}');
 
 @plugin "daisyui/theme" {
     name: "jsj-pastel";

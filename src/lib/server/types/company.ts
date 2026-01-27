@@ -19,15 +19,27 @@ export interface Company {
 	location?: GeoPoint; // Geospatial location
 	operating_status?: string;
 	type_of_entity?: string;
-	created_date?: string;
+	created_date?: string | null;
 	mission_embedding?: number[];
-	// Additional fields that may exist
+	// Registration fields
+	register_capital_thb?: number;
+	register_date?: string | { $date: string } | null;
+	report_financialyear?: string;
+	typecode?: string;
+	old_id?: string | null;
+	pull_date?: string;
+	// Business details
+	mission?: string;
 	description?: string;
-	website?: string;
-	phone?: string;
-	email?: string;
-	employees?: string;
 	industry?: string;
+	employees?: string;
+	// Contact fields
+	address?: string;
+	telephone?: string | null;
+	fax?: string | null;
+	email?: string | null;
+	website?: string | null;
+	phone?: string;
 	[key: string]: unknown; // Allow additional fields
 }
 

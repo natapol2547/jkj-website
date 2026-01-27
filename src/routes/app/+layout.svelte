@@ -158,6 +158,7 @@
 		<!-- Top Navbar (Mobile & Desktop) -->
 		<header class="flex h-16 items-center justify-between border-b border-slate-800/50 bg-[#0a0a0a] px-2 lg:px-3 gap-2">
 			<!-- Mobile Menu Button -->
+            <div class="flex items-center gap-2">
 			<button
 				onclick={() => mobileMenuOpen = !mobileMenuOpen}
 				class="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white lg:hidden"
@@ -173,13 +174,14 @@
 				<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-600 to-purple-700">
 					<Zap class="h-4 w-4 text-white" />
 				</div>
-				<span class="text-lg font-bold text-white">Julist</span>
+				<span class="text-lg font-bold text-white">Julist V2</span>
 			</a>
+            </div>
 
 			<!-- Credits / Subscription Status -->
 			<button
                 onclick={() => sidebarOpen = !sidebarOpen}
-                class="hidden md:block rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+                class="hidden lg:block rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
             >
                 {#if sidebarOpen}
                     <ChevronLeft class="h-5 w-5" />
@@ -310,7 +312,7 @@
 		{/if}
 
 		<!-- Page Content -->
-		<main class="flex-1 overflow-hidden">
+		<main class="flex-1 overflow-y-auto">
 			{@render children()}
 		</main>
 	</div>

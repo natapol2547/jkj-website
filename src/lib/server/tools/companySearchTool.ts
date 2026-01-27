@@ -11,17 +11,15 @@ const filtersSchema = z
 		operating_status: z
 			.string()
 			.optional()
-			.describe('Filter by operating status (e.g., "ยังดำเนินกิจการอยู่", "เสร็จการชำระบัญชี", "เลิก", "ร้าง", "แปรสภาพ", "พิทักษ์ทรัพย์เด็ดขาด", "ล้มละลาย", "คืนสู่ทะเบียน", "ฟื้นฟู", "ควบ", "สิ้นสภาพ")'),
+			.describe('Filter by status: "ยังดำเนินกิจการอยู่" (active), "เลิก" (closed), "ล้มละลาย" (bankrupt)'),
 		type_of_entity: z
 			.string()
 			.optional()
-			.describe(
-				'Filter by entity type (e.g., "บริษัทจำกัด", "ห้างหุ้นส่วนจำกัด")'
-			),
+			.describe('Filter by type: "บริษัทจำกัด", "บริษัทมหาชนจำกัด", "ห้างหุ้นส่วนจำกัด"'),
 		location: z
 			.string()
 			.optional()
-			.describe('Filter by location/province (e.g., "กรุงเทพมหานคร", "กระบี่", "พัทลุง")')
+			.describe('Thai province name: "กรุงเทพมหานคร", "เชียงใหม่", "ภูเก็ต", etc.')
 	})
 	.optional();
 
@@ -32,22 +30,18 @@ const companySearchSchema = z.object({
 	query: z
 		.string()
 		.min(1)
-		.describe(
-			'The search query to find companies. Can be a Thai company name (ex. ซีพี แอ็กซ์ตร้า จำกัด), business description, industry, or semantic query like "บริษัทขนส่ง"'
-		),
+		.describe('Thai search query: company name, industry, or business description'),
 	searchType: z
 		.enum(['auto', 'fulltext', 'vector', 'hybrid'])
 		.default('auto')
-		.describe(
-			'Search type: "auto" (recommended - automatically determines best approach), "fulltext" (keyword-based), "vector" (semantic similarity), "hybrid" (combines both with RRF fusion)'
-		),
+		.describe('Search mode. Use "auto" (default) unless searching exact names ("fulltext")'),
 	limit: z
 		.number()
 		.min(1)
 		.max(15)
 		.default(10)
-		.describe('Maximum number of results to return (1-15, default: 10)'),
-	filters: filtersSchema.describe('Optional filters to narrow down search results')
+		.describe('Number of results (default: 10)'),
+	filters: filtersSchema.describe('Optional filters. Only use when user explicitly requests filtering by status, type, or location.')
 });
 
 /**
@@ -75,14 +69,16 @@ export const companySearchTool = tool(
 			// Format results for LLM consumption
 			const formattedResults = response.results.map((result, index) => ({
 				rank: index + 1,
+				document_id: result.company._id.toString(),
 				company_id: result.company.company_id,
 				name: result.company.name,
 				businessdomain: result.company.businessdomain || 'N/A',
+				address: result.company.address || 'N/A',
 				location: result.company.location || 'N/A',
 				operating_status: result.company.operating_status || 'N/A',
 				type_of_entity: result.company.type_of_entity || 'N/A',
 				website: result.company.website || 'N/A',
-				phone: result.company.phone || 'N/A',
+				phone: result.company.phone || result.company.telephone || 'N/A',
 				email: result.company.email || 'N/A',
 				relevance_score: Math.round(result.score * 1000) / 1000,
 				match_type: result.searchType
@@ -116,23 +112,14 @@ export const companySearchTool = tool(
 	},
 	{
 		name: 'company_search',
-		description: `Search for Thai companies in the database. You may only use Thai language to search for companies.
+		description: `Search Thai companies by name, industry, or description.
 
-Use this tool when you need to:
-- Find companies by name, industry, or business domain
-- Search for companies in a specific location/province in Thailand
-- Find companies similar to a description or business concept
-- Look up company details like contact information, operating status, and entity type
+RULE: Only add filters when user explicitly requests them. No filters for general searches.
 
-The tool supports three search modes:
-1. "auto" (default) - Automatically picks the best strategy based on your query
-2. "fulltext" - Best for exact names, IDs, or specific keywords
-3. "vector" - Best for semantic/conceptual queries like "companies that do X"
-4. "hybrid" - Combines both methods for comprehensive results
-
-You can also filter results by operating_status, type_of_entity, location.
-
-Returns company information including: name, business domain, location, operating status, entity type, contact details, and relevance score.`,
+Examples:
+- "บริษัทขนส่ง" → query: "บริษัทขนส่ง"
+- "IT ในกรุงเทพ" → query: "IT", filters: {location: "กรุงเทพมหานคร"}
+- "บริษัทมหาชน อาหาร" → query: "อาหาร", filters: {type_of_entity: "บริษัทมหาชนจำกัด"}`,
 		schema: companySearchSchema
 	}
 );
