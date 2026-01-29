@@ -2,7 +2,7 @@
 	import { user } from '$lib/firebase.svelte';
 	import Collection from '$lib/components/Collection.svelte';
 	import CreateEditProject from '$lib/components/CreateEditProject.svelte';
-	import { query, collection, where, orderBy } from 'firebase/firestore';
+	import { query, collection, where, orderBy, getCountFromServer } from 'firebase/firestore';
 	import { getFirebaseContext } from '$lib/stores/sdk.svelte';
 	import type { Project } from '$lib/types/project';
 	import {
@@ -19,8 +19,10 @@
 		Loader2,
 		FileText
 	} from '@lucide/svelte';
-	import { fly, fade } from 'svelte/transition';
+	import { fade, fly } from 'svelte/transition';
+	import { flip } from 'svelte/animate';
 	import { goto } from '$app/navigation';
+	import { getCompanyCount } from '$lib';
 
 	// Get Firebase context
 	const { firestore } = getFirebaseContext();
@@ -116,10 +118,6 @@
 		});
 	}
 
-	// Get company count
-	function getCompanyCount(project: Project): number {
-		return Object.keys(project.companies || {}).length;
-	}
 </script>
 
 {#if projectsQuery}
@@ -250,8 +248,7 @@
 					<a
 						href="/app/projects/{project.id}"
 						class="group block rounded-xl border border-slate-800/50 bg-[#141414] p-5 transition-all hover:border-violet-500/50 hover:bg-[#1a1a1a]"
-						in:fly={{ y: 20, duration: 300, delay: i * 50 }}
-                        out:fade
+						animate:flip={{ duration: 300 }}
 					>
 						<!-- Header -->
 						<div class="mb-3 flex items-start justify-between">
@@ -295,7 +292,13 @@
 						<!-- Companies Count -->
 						<div class="mb-3 flex items-center gap-2 text-sm text-slate-400">
 							<Building2 class="h-4 w-4" />
-							<span>{getCompanyCount(project)} companies</span>
+							{#await getCompanyCount(project.id)}
+								<span class="text-slate-500">...</span>
+							{:then count}
+								<span>{count} {count === 1 ? 'company' : 'companies'}</span>
+							{:catch}
+								<span>0 companies</span>
+							{/await}
 						</div>
 
 						<!-- Footer -->

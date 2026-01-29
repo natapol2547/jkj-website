@@ -1,0 +1,311 @@
+import { StateGraph, MessagesAnnotation, START, END } from "@langchain/langgraph";
+import { MongoDBSaver } from "@langchain/langgraph-checkpoint-mongodb";
+import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
+import { tools } from '../tools/index';
+import { client } from '../mongo';
+import { createLLM } from '../llm';
+import { ToolNode } from "@langchain/langgraph/prebuilt";
+import type { Company } from '../types/company';
+
+/**
+ * System prompt for the deep research agent
+ * Focused on thorough company research and producing detailed reports
+ */
+const RESEARCH_SYSTEM_PROMPT = `You are an expert business researcher specializing in company analysis and market intelligence.
+
+Your job is to conduct thorough research on companies and produce comprehensive, well-structured reports in Markdown format.
+
+## Available Tools
+
+### \`company_search\`
+Use this to search for company information in our database. This is your primary source for Thai company data including business domain, registration details, and contact information.
+
+### \`internet_search\`
+Use this for general internet research to find:
+- Recent news and press releases
+- Market analysis and industry trends
+- Competitor information
+- Company websites and social media presence
+- Financial reports and business updates
+
+## Research Guidelines
+
+1. **Start with our database**: Always begin by searching for the company in our database using \`company_search\`
+2. **Expand with internet research**: Use \`internet_search\` to gather additional context, news, and market information
+3. **Be thorough**: Make multiple searches with different queries to gather comprehensive information
+4. **Cross-reference**: Verify information from multiple sources when possible
+5. **Stay focused**: Keep the research relevant to the user's specified topic
+6. **Cite your sources**: Always cite your sources in the format [source](url)
+
+## Output Format
+
+Structure your final report in Markdown with clear sections:
+- Executive Summary
+- Company Overview
+- Key Findings (based on research topic)
+- Analysis and Insights
+- Sources and References
+
+Respond in the same language as the user's request (Thai or English).
+Use proper Markdown formatting including headers, bullet points, and links.`;
+
+// Memory checkpointer for research sessions
+const checkpointer = new MongoDBSaver({ client: client as any, dbName: 'research_history' });
+
+/**
+ * Create the deep research agent
+ */
+function createDeepResearchAgent(apiKey?: string, recursionLimit: number = 25) {
+	// Use a capable model for research tasks
+	const model = createLLM('google/gemini-2.0-flash-001', 8192, 0.3, apiKey);
+
+	// Define the agent node with recursion limit awareness
+	async function callModel(state: typeof MessagesAnnotation.State, config: any) {
+		const currentStep = config?.metadata?.langgraph_step || 0;
+		const remainingSteps = recursionLimit - currentStep;
+		
+		// If we're within 3 steps of the limit and the last message is a tool message,
+		// force a final response by removing tools
+		const shouldForceResponse = remainingSteps <= 3 && 
+			state.messages.length > 0 && 
+			state.messages[state.messages.length - 1].type === 'tool';
+		
+		// Add system message if this is the first call
+		const messages = state.messages[0]?.type === 'system' 
+			? state.messages 
+			: [new SystemMessage(RESEARCH_SYSTEM_PROMPT), ...state.messages];
+		
+		let response;
+		
+		if (shouldForceResponse) {
+			// Call model without tools to force a final response
+			console.log(`[DeepResearch] Approaching recursion limit (step ${currentStep}/${recursionLimit}), forcing final response`);
+			response = await model.invoke(messages, config);
+		} else {
+			// Bind tools for normal operation
+			const modelWithTools = model.bindTools(tools);
+			response = await modelWithTools.invoke(messages, config);
+		}
+		
+		return { messages: [response] };
+	}
+
+	// Define the function that determines whether to continue or end
+	function shouldContinue(state: typeof MessagesAnnotation.State) {
+		const lastMessage = state.messages[state.messages.length - 1];
+		
+		// If the last message has tool calls, continue to the tools node
+		if (lastMessage._getType() === 'ai' && (lastMessage as AIMessage).tool_calls?.length) {
+			return 'tools';
+		}
+		
+		// Otherwise, end the agent execution
+		return END;
+	}
+
+	// Create the tool node
+	const toolNode = new ToolNode(tools);
+
+	// Build the graph
+	const workflow = new StateGraph(MessagesAnnotation)
+		.addNode('agent', callModel)
+		.addNode('tools', toolNode)
+		.addEdge(START, 'agent')
+		.addConditionalEdges('agent', shouldContinue, ['tools', END])
+		.addEdge('tools', 'agent');
+
+	// Compile the graph with checkpointer
+	const agent = workflow.compile({ checkpointer });
+
+	return agent;
+}
+
+export interface DeepResearchOptions {
+	topic: string;
+	companyName: string;
+	companyContext?: Partial<Company>;
+	threadId?: string;
+	apiKey?: string;
+	recursionLimit?: number;
+	onProgress?: (content: string, isComplete: boolean) => Promise<void>;
+}
+
+/**
+ * Build the research query from topic and company context
+ */
+function buildResearchQuery(topic: string, companyName: string, companyContext?: Partial<Company>): string {
+	let contextInfo = '';
+	
+	if (companyContext) {
+		const parts = [];
+		if (companyContext.businessdomain) parts.push(`Business: ${companyContext.businessdomain}`);
+		if (companyContext.address) parts.push(`Location: ${companyContext.address}`);
+		if (companyContext.mission) parts.push(`Mission: ${companyContext.mission}`);
+		
+		if (parts.length > 0) {
+			contextInfo = `\n\nKnown company information:\n${parts.join('\n')}`;
+		}
+	}
+	
+	return `Research Topic: ${topic}
+
+Target Company: ${companyName}${contextInfo}
+
+Please conduct thorough research on this company based on the specified topic. Use the available tools to gather information and produce a comprehensive report.`;
+}
+
+/**
+ * Extract the final content from agent messages
+ */
+function extractFinalContent(messages: any[]): string {
+	// Get all AI messages and combine their content
+	const aiMessages = messages.filter(msg => msg._getType() === 'ai');
+	
+	if (aiMessages.length === 0) return '';
+	
+	// Get the last AI message (final response)
+	const lastAIMessage = aiMessages[aiMessages.length - 1] as AIMessage;
+	
+	if (typeof lastAIMessage.content === 'string') {
+		return lastAIMessage.content;
+	}
+	
+	// Handle array content (when there are tool calls mixed in)
+	if (Array.isArray(lastAIMessage.content)) {
+		return lastAIMessage.content
+			.filter((c: any) => c.type === 'text')
+			.map((c: any) => c.text)
+			.join('\n');
+	}
+	
+	return '';
+}
+
+/**
+ * Run the deep research agent and return the full result
+ */
+export async function runDeepResearch(options: DeepResearchOptions): Promise<{ content: string; messages: any[] }> {
+	const { 
+		topic, 
+		companyName, 
+		companyContext, 
+		threadId = `research_${Date.now()}`, 
+		apiKey, 
+		recursionLimit = 25 
+	} = options;
+
+	const agent = createDeepResearchAgent(apiKey, recursionLimit);
+
+	const config = {
+		configurable: {
+			thread_id: threadId
+		},
+		recursionLimit: recursionLimit
+	};
+
+	const query = buildResearchQuery(topic, companyName, companyContext);
+	
+	const input = {
+		messages: [new HumanMessage(query)]
+	};
+
+	console.log(`[DeepResearch] Starting research for "${companyName}" with topic: "${topic}"`);
+
+	// Run the agent and collect the response
+	const result = await agent.invoke(input, config);
+	
+	const content = extractFinalContent(result.messages);
+
+	console.log(`[DeepResearch] Completed research for "${companyName}"`);
+
+	return {
+		content,
+		messages: result.messages
+	};
+}
+
+/**
+ * Stream the deep research agent with periodic progress callbacks
+ */
+export async function streamDeepResearch(options: DeepResearchOptions): Promise<{ content: string; messages: any[] }> {
+	const { 
+		topic, 
+		companyName, 
+		companyContext, 
+		threadId = `research_${Date.now()}`, 
+		apiKey, 
+		recursionLimit = 25,
+		onProgress 
+	} = options;
+
+	const agent = createDeepResearchAgent(apiKey, recursionLimit);
+
+	const config = {
+		configurable: {
+			thread_id: threadId
+		},
+		recursionLimit: recursionLimit
+	};
+
+	const query = buildResearchQuery(topic, companyName, companyContext);
+	
+	const input = {
+		messages: [new HumanMessage(query)]
+	};
+
+	console.log(`[DeepResearch] Starting streaming research for "${companyName}" with topic: "${topic}"`);
+
+	// Stream the agent response
+	const stream = await agent.stream(input, {
+		...config,
+		streamMode: 'values'
+	});
+
+	let lastContent = '';
+	let allMessages: any[] = [];
+	let lastUpdateTime = Date.now();
+	const UPDATE_INTERVAL = 5000; // 5 seconds
+
+	for await (const chunk of stream) {
+		if (chunk.messages) {
+			allMessages = chunk.messages;
+			
+			// Extract current content
+			const currentContent = extractFinalContent(allMessages);
+			
+			// Check if content has changed and enough time has passed
+			const now = Date.now();
+			if (currentContent !== lastContent && (now - lastUpdateTime) >= UPDATE_INTERVAL) {
+				lastContent = currentContent;
+				lastUpdateTime = now;
+				
+				if (onProgress && currentContent) {
+					await onProgress(currentContent, false);
+				}
+			}
+		}
+	}
+
+	// Final content extraction
+	const finalContent = extractFinalContent(allMessages);
+	
+	// Send final update
+	if (onProgress && finalContent) {
+		await onProgress(finalContent, true);
+	}
+
+	console.log(`[DeepResearch] Completed streaming research for "${companyName}"`);
+
+	return {
+		content: finalContent,
+		messages: allMessages
+	};
+}
+
+/**
+ * Get research history for a thread
+ */
+export async function getResearchHistory(threadId: string) {
+	const state = await checkpointer.get({ configurable: { thread_id: threadId } });
+	return state?.channel_values?.messages || [];
+}

@@ -34,10 +34,10 @@ function createSearchAgent(apiKey?: string, recursionLimit: number = 10) {
 		// force a final response by removing tools
 		const shouldForceResponse = remainingSteps <= 2 && 
 			state.messages.length > 0 && 
-			state.messages[state.messages.length - 1]._getType() === 'tool';
+			state.messages[state.messages.length - 1].type === 'tool';
 		
 		// Add system message if this is the first call
-		const messages = state.messages[0]._getType() === 'system' 
+		const messages = state.messages[0].type === 'system' 
 			? state.messages 
 			: [new SystemMessage(SYSTEM_PROMPT), ...state.messages];
 		
