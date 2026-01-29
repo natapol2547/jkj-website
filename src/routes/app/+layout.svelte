@@ -64,7 +64,7 @@
 	>
 		<!-- Logo -->
 		<div class="flex h-16 items-center justify-between border-b border-slate-800/50 px-4">
-			<a href="/" class="flex items-center gap-3">
+			<a href="/app" class="flex items-center gap-3">
 				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-violet-600 to-purple-700">
 					<Zap class="h-5 w-5 text-white" />
 				</div>
@@ -170,7 +170,7 @@
 			</button>
 
 			<!-- Mobile Logo -->
-			<a href="/" class="flex items-center gap-2 lg:hidden">
+			<a href="/app" class="flex items-center gap-2 lg:hidden">
 				<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-600 to-purple-700">
 					<Zap class="h-4 w-4 text-white" />
 				</div>

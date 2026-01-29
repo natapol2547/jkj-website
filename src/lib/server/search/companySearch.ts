@@ -77,8 +77,8 @@ function buildSearchFilterClauses(
  * Note: Vector search only supports simple operators ($eq, $in, $gt, $lt, etc.)
  * Geo filtering is NOT supported in vector search pre-filter
  * 
- * For string fields, we use $regex for partial matching since vector search
- * doesn't support Atlas Search operators
+ * For string fields, we use $eq for exact matching since vector search
+ * doesn't support $regex or Atlas Search operators
  */
 function buildVectorSearchFilter(filters?: CompanySearchFilters): Record<string, unknown> | undefined {
 	if (!filters) return undefined;
@@ -86,13 +86,13 @@ function buildVectorSearchFilter(filters?: CompanySearchFilters): Record<string,
 	const filter: Record<string, unknown> = {};
 
 	if (filters.operating_status) {
-		// Use regex for partial matching on operating_status
-		filter.operating_status = { $regex: filters.operating_status, $options: 'i' };
+		// Use $eq for exact matching on operating_status
+		filter.operating_status = { $eq: filters.operating_status };
 	}
 
 	if (filters.type_of_entity) {
-		// Use regex for partial matching on type_of_entity
-		filter.type_of_entity = { $regex: filters.type_of_entity, $options: 'i' };
+		// Use $eq for exact matching on type_of_entity
+		filter.type_of_entity = { $eq: filters.type_of_entity };
 	}
 
 	// Note: Location/geo filtering is NOT supported in vector search pre-filter
