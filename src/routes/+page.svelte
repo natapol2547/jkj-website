@@ -188,7 +188,7 @@
 </script>
 
 <svelte:head>
-	<title>Julist V2 - Connect Your Tech Stack</title>
+	<title>Operetta - Connect Your Tech Stack</title>
 	<meta name="description" content="Integrate with your sales and marketing stack in under 30 seconds. Your apps deserve a real relationship without the drama." />
 </svelte:head>
 
@@ -204,7 +204,7 @@
 				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-violet-600 to-purple-700">
 					<Zap class="h-4 w-4 text-white" />
 				</div>
-				<span class="font-sans text-lg font-bold text-slate-800 whitespace-nowrap">Julist V2</span>
+				<span class="font-sans text-lg font-bold text-slate-800 whitespace-nowrap">Operetta</span>
 			</a>
 
 			<!-- Desktop Navigation -->
@@ -655,14 +655,14 @@
 					<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-600 to-purple-700">
 						<Zap class="h-4 w-4 text-white" />
 					</div>
-					<span class="text-lg font-bold text-slate-800">Julist V2</span>
+					<span class="text-lg font-bold text-slate-800">Operetta</span>
 				</div>
 				<div class="flex gap-6 text-sm text-slate-500">
 					<a href="#privacy" class="transition-colors hover:text-violet-600">Privacy</a>
 					<a href="#terms" class="transition-colors hover:text-violet-600">Terms</a>
 					<a href="#contact" class="transition-colors hover:text-violet-600">Contact</a>
 				</div>
-				<p class="font-mono text-sm text-slate-400">© 2026 Julist V2. All rights reserved.</p>
+				<p class="font-mono text-sm text-slate-400">© 2026 Operetta. All rights reserved.</p>
 			</div>
 		</div>
 	</footer>

@@ -35,8 +35,8 @@
 </script>
 
 <svelte:head>
-	<title>Sign In - Julist V2</title>
-	<meta name="description" content="Sign in to Julist V2 to start generating verified leads" />
+	<title>Sign In - Operetta</title>
+	<meta name="description" content="Sign in to Operetta to start generating verified leads" />
 </svelte:head>
 
 <div class="min-h-screen bg-grid relative flex items-center justify-center px-4 py-12" data-theme="light">

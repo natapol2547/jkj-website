@@ -4,5 +4,10 @@
   "framework": "sveltekit",
   "rewrites": [
     { "source": "/py/(.*)", "destination": "/api/index.py" }
-  ]
+  ],
+  "functions": {
+    "api/v1/research/+server.ts": {
+      "maxDuration": 800
+    }
+  }
 }

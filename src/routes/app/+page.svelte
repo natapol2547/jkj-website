@@ -128,7 +128,7 @@
 </script>
 
 <svelte:head>
-	<title>Search - Julist V2</title>
+	<title>Search - Operetta</title>
 </svelte:head>
 
 <div class="flex h-[calc(100vh-64px)] flex-col bg-[#0f0f0f]" data-theme="dark">

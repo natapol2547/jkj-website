@@ -71,7 +71,7 @@
 					<Zap class="h-5 w-5 text-white" />
 				</div>
 				{#if sidebarOpen}
-					<span class="text-lg font-bold text-white">Julist V2</span>
+					<span class="text-lg font-bold text-white">Operetta</span>
 				{/if}
 			</a>
 		</div>
@@ -176,7 +176,7 @@
 				<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-600 to-purple-700">
 					<Zap class="h-4 w-4 text-white" />
 				</div>
-				<span class="text-lg font-bold text-white">Julist V2</span>
+				<span class="text-lg font-bold text-white">Operetta</span>
 			</a>
             </div>
 
@@ -265,7 +265,7 @@
 							<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-violet-600 to-purple-700">
 								<Zap class="h-5 w-5 text-white" />
 							</div>
-							<span class="text-lg font-bold text-white">Julist V2</span>
+							<span class="text-lg font-bold text-white">Operetta</span>
 						</a>
 						<button
 							onclick={() => mobileMenuOpen = false}

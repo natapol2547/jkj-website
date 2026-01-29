@@ -48,6 +48,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Verify project exists and user owns it
+        console.log('body.projectId', body.projectId);
 		const projectRef = adminDB.collection('projects').doc(body.projectId);
 		const projectDoc = await projectRef.get();
 
