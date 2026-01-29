@@ -61,7 +61,7 @@
 		const newStatus = project.status === 'active' ? 'archived' : 'active';
 
 		try {
-			const response = await fetch(`/api/v1/projects/${project.id}`, {
+			const response = await fetch(`/api/v1/project-detail?id=${project.id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ status: newStatus })
@@ -88,7 +88,7 @@
 		if (!deletingProject) return;
 
 		try {
-			const response = await fetch(`/api/v1/projects/${deletingProject.id}`, {
+			const response = await fetch(`/api/v1/project-detail?id=${deletingProject.id}`, {
 				method: 'DELETE'
 			});
 

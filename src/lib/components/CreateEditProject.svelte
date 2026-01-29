@@ -95,7 +95,7 @@
 					notes: formData.notes
 				};
 
-				const response = await fetch(`/api/v1/projects/${project.id}`, {
+				const response = await fetch(`/api/v1/project-detail?id=${project.id}`, {
 					method: 'PATCH',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(updateData)

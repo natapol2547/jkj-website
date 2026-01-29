@@ -1,22 +1,30 @@
 import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
 import { adminDB } from '$lib/server/admin';
-import type { UpdateProjectRequest, Project, ApiResponse } from '$lib/types/project';
+import type { UpdateProjectRequest, Project } from '$lib/types/project';
 import { FieldValue } from 'firebase-admin/firestore';
 
 /**
- * GET /api/v1/projects/[id]
+ * GET /api/v1/project-detail?id=xxx
  * 
  * Get a single project by ID
  */
-export const GET: RequestHandler = async ({ params, locals }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
 	// Check authentication
 	if (!locals.userID) {
 		return json({ success: false, error: 'Unauthorized' }, { status: 401 });
 	}
 
+	const projectId = url.searchParams.get('id');
+	if (!projectId) {
+		return json(
+			{ success: false, error: 'Project ID is required' },
+			{ status: 400 }
+		);
+	}
+
 	try {
-		const projectRef = adminDB.collection('projects').doc(params.id);
+		const projectRef = adminDB.collection('projects').doc(projectId);
 		const projectDoc = await projectRef.get();
 
 		if (!projectDoc.exists) {
@@ -58,18 +66,26 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 };
 
 /**
- * PATCH /api/v1/projects/[id]
+ * PATCH /api/v1/project-detail?id=xxx
  * 
  * Update a project
  */
-export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+export const PATCH: RequestHandler = async ({ url, request, locals }) => {
 	// Check authentication
 	if (!locals.userID) {
 		return json({ success: false, error: 'Unauthorized' }, { status: 401 });
 	}
 
+	const projectId = url.searchParams.get('id');
+	if (!projectId) {
+		return json(
+			{ success: false, error: 'Project ID is required' },
+			{ status: 400 }
+		);
+	}
+
 	try {
-		const projectRef = adminDB.collection('projects').doc(params.id);
+		const projectRef = adminDB.collection('projects').doc(projectId);
 		const projectDoc = await projectRef.get();
 
 		if (!projectDoc.exists) {
@@ -149,18 +165,26 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 };
 
 /**
- * DELETE /api/v1/projects/[id]
+ * DELETE /api/v1/project-detail?id=xxx
  * 
  * Delete a project
  */
-export const DELETE: RequestHandler = async ({ params, locals }) => {
+export const DELETE: RequestHandler = async ({ url, locals }) => {
 	// Check authentication
 	if (!locals.userID) {
 		return json({ success: false, error: 'Unauthorized' }, { status: 401 });
 	}
 
+	const projectId = url.searchParams.get('id');
+	if (!projectId) {
+		return json(
+			{ success: false, error: 'Project ID is required' },
+			{ status: 400 }
+		);
+	}
+
 	try {
-		const projectRef = adminDB.collection('projects').doc(params.id);
+		const projectRef = adminDB.collection('projects').doc(projectId);
 		const projectDoc = await projectRef.get();
 
 		if (!projectDoc.exists) {
@@ -185,7 +209,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 
 		return json({
 			success: true,
-			data: { id: params.id }
+			data: { id: projectId }
 		});
 	} catch (error) {
 		console.error('Delete project error:', error);

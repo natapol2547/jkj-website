@@ -258,7 +258,7 @@ function getCompanySearchResults(message: UIMessage) {
 				address: selectedCompany.address || ''
 			};
 
-			const response = await fetch(`/api/v1/projects/${selectedProjectId}/companies`, {
+			const response = await fetch(`/api/v1/project-companies?projectId=${selectedProjectId}`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(companyData)

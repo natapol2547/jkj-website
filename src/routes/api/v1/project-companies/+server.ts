@@ -1,22 +1,30 @@
 import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
 import { adminDB } from '$lib/server/admin';
-import type { AddCompanyRequest, ApiResponse, ProjectCompany } from '$lib/types/project';
+import type { AddCompanyRequest, ProjectCompany } from '$lib/types/project';
 import { FieldValue } from 'firebase-admin/firestore';
 
 /**
- * POST /api/v1/projects/[id]/companies
+ * POST /api/v1/project-companies?projectId=xxx
  * 
  * Add a company to a project
  */
-export const POST: RequestHandler = async ({ params, request, locals }) => {
+export const POST: RequestHandler = async ({ url, request, locals }) => {
 	// Check authentication
 	if (!locals.userID) {
 		return json({ success: false, error: 'Unauthorized' }, { status: 401 });
 	}
 
+	const projectId = url.searchParams.get('projectId');
+	if (!projectId) {
+		return json(
+			{ success: false, error: 'Project ID is required' },
+			{ status: 400 }
+		);
+	}
+
 	try {
-		const projectRef = adminDB.collection('projects').doc(params.id);
+		const projectRef = adminDB.collection('projects').doc(projectId);
 		const projectDoc = await projectRef.get();
 
 		if (!projectDoc.exists) {
@@ -87,27 +95,35 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 };
 
 /**
- * DELETE /api/v1/projects/[id]/companies?companyId=xxx
+ * DELETE /api/v1/project-companies?projectId=xxx&companyId=yyy
  * 
  * Remove a company from a project
  */
-export const DELETE: RequestHandler = async ({ params, url, locals }) => {
+export const DELETE: RequestHandler = async ({ url, locals }) => {
 	// Check authentication
 	if (!locals.userID) {
 		return json({ success: false, error: 'Unauthorized' }, { status: 401 });
 	}
 
+	const projectId = url.searchParams.get('projectId');
+	const companyId = url.searchParams.get('companyId');
+
+	if (!projectId) {
+		return json(
+			{ success: false, error: 'Project ID is required' },
+			{ status: 400 }
+		);
+	}
+
+	if (!companyId) {
+		return json(
+			{ success: false, error: 'Company ID is required' },
+			{ status: 400 }
+		);
+	}
+
 	try {
-		const companyId = url.searchParams.get('companyId');
-
-		if (!companyId) {
-			return json(
-				{ success: false, error: 'companyId query parameter is required' },
-				{ status: 400 }
-			);
-		}
-
-		const projectRef = adminDB.collection('projects').doc(params.id);
+		const projectRef = adminDB.collection('projects').doc(projectId);
 		const projectDoc = await projectRef.get();
 
 		if (!projectDoc.exists) {

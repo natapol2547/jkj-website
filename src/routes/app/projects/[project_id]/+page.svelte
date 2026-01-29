@@ -61,7 +61,7 @@
 		const newStatus = proj.status === 'active' ? 'archived' : 'active';
 
 		try {
-			const response = await fetch(`/api/v1/projects/${projectId}`, {
+			const response = await fetch(`/api/v1/project-detail?id=${projectId}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ status: newStatus })
@@ -80,7 +80,7 @@
 		if (!projectId) return;
 
 		try {
-			const response = await fetch(`/api/v1/projects/${projectId}`, {
+			const response = await fetch(`/api/v1/project-detail?id=${projectId}`, {
 				method: 'DELETE'
 			});
 
@@ -125,7 +125,7 @@
 				address: company.address || ''
 			};
 
-			const response = await fetch(`/api/v1/projects/${projectId}/companies`, {
+			const response = await fetch(`/api/v1/project-companies?projectId=${projectId}`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(companyData)
@@ -151,7 +151,7 @@
 		if (!projectId) return;
 
 		try {
-			const response = await fetch(`/api/v1/projects/${projectId}/companies?companyId=${companyId}`, {
+			const response = await fetch(`/api/v1/project-companies?projectId=${projectId}&companyId=${companyId}`, {
 				method: 'DELETE'
 			});
 

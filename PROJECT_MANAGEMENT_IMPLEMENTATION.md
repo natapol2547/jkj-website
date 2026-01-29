@@ -19,15 +19,17 @@ A complete project management system has been implemented that allows users to c
 - `GET` - List all user projects (sorted by updatedAt)
 - `POST` - Create new project (with validation)
 
-**File:** `src/routes/api/v1/projects/[id]/+server.ts`
-- `GET` - Get single project by ID (with ownership verification)
-- `PATCH` - Update project details (name, description, status, tags, notes)
-- `DELETE` - Delete project (with ownership verification)
+**File:** `src/routes/api/v1/project-detail/+server.ts`
+- `GET /api/v1/project-detail?id=xxx` - Get single project by ID (with ownership verification)
+- `PATCH /api/v1/project-detail?id=xxx` - Update project details (name, description, status, tags, notes)
+- `DELETE /api/v1/project-detail?id=xxx` - Delete project (with ownership verification)
 
 #### Companies Management
-**File:** `src/routes/api/v1/projects/[id]/companies/+server.ts`
-- `POST` - Add company to project (stores snapshot of company data)
-- `DELETE` - Remove company from project (query param: companyId)
+**File:** `src/routes/api/v1/project-companies/+server.ts`
+- `POST /api/v1/project-companies?projectId=xxx` - Add company to project (stores snapshot of company data)
+- `DELETE /api/v1/project-companies?projectId=xxx&companyId=yyy` - Remove company from project
+
+**Note:** API routes were restructured to use a flat pattern instead of nested dynamic routes to ensure compatibility with Vercel's serverless functions.
 
 ### 3. Firestore Real-time Stores
 **File:** `src/lib/stores/projects.svelte.ts`
@@ -210,10 +212,11 @@ Consider adding:
 - `src/lib/types/project.ts`
 - `src/lib/stores/projects.svelte.ts`
 - `src/routes/api/v1/projects/+server.ts`
-- `src/routes/api/v1/projects/[id]/+server.ts`
-- `src/routes/api/v1/projects/[id]/companies/+server.ts`
+- `src/routes/api/v1/project-detail/+server.ts` (flat API pattern)
+- `src/routes/api/v1/project-companies/+server.ts` (flat API pattern)
 - `src/routes/app/projects/+page.svelte`
 - `src/routes/app/projects/[project_id]/+page.svelte`
+- `.vercelignore` (deployment configuration)
 
 ### Modified:
 - `src/lib/components/SearchChat.svelte`
