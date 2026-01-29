@@ -6,7 +6,7 @@
     { "source": "/py/(.*)", "destination": "/api/index.py" }
   ],
   "functions": {
-    "api/v1/research.js": {
+    "src/api/v1/research.js": {
       "maxDuration": 800
     }
   }
