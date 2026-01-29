@@ -1,0 +1,10 @@
+# Python files (prevent interference with Node.js build)
+__pycache__/
+*.py[codz]
+*$py.class
+venv/
+env/
+
+# Development and test files
+*.test.ts
+test_*.ts
