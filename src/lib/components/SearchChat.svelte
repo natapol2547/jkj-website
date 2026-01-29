@@ -21,17 +21,47 @@
 		X,
 		History,
 		Bookmark,
-		Download
+		Download,
+		FolderPlus,
+		Check,
+		Loader2
 	} from '@lucide/svelte';
     import { Chat } from '@ai-sdk/svelte';
     import { DefaultChatTransport, type UIMessage } from 'ai';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
 	import SearchLanding from '$lib/components/SearchLanding.svelte';
+	import { firestore, user } from '$lib/firebase.svelte';
+	import Collection from '$lib/components/Collection.svelte';
+	import { query, collection, where, orderBy } from 'firebase/firestore';
+	import { getFirebaseContext } from '$lib/stores/sdk.svelte';
+	import type { AddCompanyRequest } from '$lib/types/project';
 
     let { chat, searchQuery = $bindable(''), handleSubmit = $bindable(() => {}) }: { chat: Chat, searchQuery: string, handleSubmit: (e: Event) => void } = $props();
     
 	let isSearching = $derived(chat.status != 'ready');
+
+	// Add to project state
+	let showAddToProjectModal = $state(false);
+	let selectedCompany = $state<CompanyResult | null>(null);
+	let addingToProject = $state(false);
+	let selectedProjectId = $state<string | null>(null);
+	let addToProjectSuccess = $state(false);
+
+	// Get Firebase context (with fallback to imported firestore)
+	const contextFirebase = getFirebaseContext();
+	const firestoreInstance = $derived(contextFirebase?.firestore || firestore);
+
+	// Build query for active projects
+	const projectsQuery = $derived.by(() => {
+		if (!user.current?.uid || !firestoreInstance) return null;
+		return query(
+			collection(firestoreInstance, 'projects') as any,
+			where('userId', '==', user.current.uid),
+			where('status', '==', 'active'),
+			orderBy('updatedAt', 'desc')
+		) as any;
+	});
 
 	// Configure marked to allow HTML (for Tailwind/DaisyUI styled content)
 	marked.setOptions({
@@ -205,6 +235,54 @@ function getCompanySearchResults(message: UIMessage) {
     function formatToolName(toolName: string) {
         return toolName.replace('_', ' ').replace(/\b\w/g, char => char.toUpperCase());
     }
+
+	// Open add to project modal
+	function openAddToProject(company: CompanyResult) {
+		selectedCompany = company;
+		selectedProjectId = null;
+		addToProjectSuccess = false;
+		showAddToProjectModal = true;
+	}
+
+	// Add company to selected project
+	async function addCompanyToProject() {
+		if (!selectedCompany || !selectedProjectId) return;
+
+		addingToProject = true;
+
+		try {
+			const companyData: AddCompanyRequest = {
+				document_id: selectedCompany.document_id,
+				name: selectedCompany.name,
+				businessdomain: selectedCompany.businessdomain || '',
+				address: selectedCompany.address || ''
+			};
+
+			const response = await fetch(`/api/v1/projects/${selectedProjectId}/companies`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(companyData)
+			});
+
+			const result = await response.json();
+
+			if (result.success) {
+				addToProjectSuccess = true;
+				setTimeout(() => {
+					showAddToProjectModal = false;
+					selectedCompany = null;
+					selectedProjectId = null;
+					addToProjectSuccess = false;
+				}, 1500);
+			} else {
+				console.error('Failed to add company:', result.error);
+			}
+		} catch (err) {
+			console.error('Failed to add company:', err);
+		} finally {
+			addingToProject = false;
+		}
+	}
 </script>
 
 <!-- Search Results State -->
@@ -278,19 +356,31 @@ function getCompanySearchResults(message: UIMessage) {
                                                                         <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-violet-600/20 to-purple-600/20 text-xs font-semibold text-violet-400">
                                                                             {i+1}
                                                                         </div>
-                                                                        <div class="flex-1 min-w-0">
-                                                                            <div class="flex items-start justify-between gap-2">
-                                                                                <h4 class="text-sm font-medium text-white line-clamp-1 group-hover/item:text-violet-400 transition-colors">{company.name}</h4>
-                                                                                <ExternalLink class="h-3.5 w-3.5 shrink-0 text-slate-500 opacity-0 transition-opacity group-hover/item:opacity-100" />
-                                                                            </div>
-                                                                            <p class="mt-1 text-xs text-slate-400 line-clamp-2">{company.businessdomain}</p>
-                                                                            {#if company.address && company.address !== 'N/A'}
-                                                                                <div class="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                                                                                    <MapPin class="h-3 w-3 shrink-0" />
-                                                                                    <span class="truncate">{company.address}</span>
-                                                                                </div>
-                                                                            {/if}
-                                                                        </div>
+                                                        <div class="flex-1 min-w-0">
+                                                            <div class="flex items-start justify-between gap-2">
+                                                                <h4 class="text-sm font-medium text-white line-clamp-1 group-hover/item:text-violet-400 transition-colors">{company.name}</h4>
+                                                                <div class="flex items-center gap-1 shrink-0">
+                                                                    <button
+                                                                        onclick={(e) => {
+                                                                            e.preventDefault();
+                                                                            openAddToProject(company);
+                                                                        }}
+                                                                        class="rounded p-1 text-slate-500 opacity-0 transition-all hover:bg-violet-500/20 hover:text-violet-400 group-hover/item:opacity-100"
+                                                                        title="Add to project"
+                                                                    >
+                                                                        <FolderPlus class="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                    <ExternalLink class="h-3.5 w-3.5 text-slate-500 opacity-0 transition-opacity group-hover/item:opacity-100" />
+                                                                </div>
+                                                            </div>
+                                                            <p class="mt-1 text-xs text-slate-400 line-clamp-2">{company.businessdomain}</p>
+                                                            {#if company.address && company.address !== 'N/A'}
+                                                                <div class="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                                                                    <MapPin class="h-3 w-3 shrink-0" />
+                                                                    <span class="truncate">{company.address}</span>
+                                                                </div>
+                                                            {/if}
+                                                        </div>
                                                                     </a>
                                                                 {/each}
                                                             </div>
@@ -455,9 +545,16 @@ function getCompanySearchResults(message: UIMessage) {
 
                             <!-- Hover Actions -->
                             <div class="mt-3 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                <button
+                                    onclick={() => openAddToProject(company)}
+                                    class="rounded-lg bg-violet-600/20 p-1.5 text-violet-400 transition-colors hover:bg-violet-600/30"
+                                    title="Add to project"
+                                >
+                                    <FolderPlus class="h-3.5 w-3.5" />
+                                </button>
                                 <a 
                                     href="/app/company/{company.document_id}" 
-                                    class="flex-1 rounded-lg bg-violet-600/20 py-1.5 text-xs font-medium text-violet-400 transition-colors hover:bg-violet-600/30 text-center"
+                                    class="flex-1 rounded-lg bg-slate-700/20 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700/30 text-center"
                                 >
                                     View Details
                                 </a>
@@ -528,3 +625,146 @@ function getCompanySearchResults(message: UIMessage) {
 		--tw-prose-bold: #f8fafc;
 	}
 </style>
+
+<!-- Add to Project Modal -->
+{#if showAddToProjectModal && selectedCompany}
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4" transition:fade={{ duration: 150 }}>
+		<!-- Backdrop -->
+		<button
+			class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+			onclick={() => (showAddToProjectModal = false)}
+			aria-label="Close modal"
+		></button>
+
+		<!-- Modal -->
+		<div
+			class="relative w-full max-w-md rounded-2xl border border-slate-800/50 bg-[#141414] p-6 shadow-xl"
+			transition:fly={{ y: 20, duration: 300 }}
+		>
+			{#if addToProjectSuccess}
+				<!-- Success State -->
+				<div class="flex flex-col items-center justify-center py-8 text-center">
+					<div class="mb-4 rounded-full bg-emerald-500/20 p-4">
+						<Check class="h-8 w-8 text-emerald-400" />
+					</div>
+					<h3 class="text-lg font-bold text-white">Added to Project!</h3>
+					<p class="mt-2 text-sm text-slate-400">Company successfully added to your project</p>
+				</div>
+			{:else}
+				<!-- Header -->
+				<div class="mb-6 flex items-center justify-between">
+					<h2 class="text-xl font-bold text-white">Add to Project</h2>
+					<button
+						onclick={() => (showAddToProjectModal = false)}
+						class="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+					>
+						<X class="h-5 w-5" />
+					</button>
+				</div>
+
+				<!-- Company Info -->
+				<div class="mb-6 rounded-lg border border-slate-700/50 bg-[#1a1a1a] p-4">
+					<h3 class="font-medium text-white line-clamp-1">{selectedCompany.name}</h3>
+					<p class="mt-1 text-xs text-slate-400 line-clamp-1">{selectedCompany.businessdomain}</p>
+				</div>
+
+				<!-- Projects List -->
+				<div class="mb-6">
+					<label class="mb-3 block text-sm font-medium text-slate-300">
+						Select a project
+					</label>
+					
+					{#if projectsQuery}
+						<Collection ref={projectsQuery}>
+							{#snippet children({ data: userProjects })}
+								{#if userProjects.length === 0}
+									<div class="rounded-lg border border-slate-700/50 bg-[#1a1a1a] p-6 text-center">
+										<p class="mb-4 text-sm text-slate-400">You don't have any projects yet</p>
+										<a
+											href="/app/projects"
+											class="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-violet-500"
+										>
+											<Plus class="h-4 w-4" />
+											Create Project
+										</a>
+									</div>
+								{:else}
+									<div class="max-h-64 space-y-2 overflow-y-auto">
+										{#each userProjects as project}
+											<button
+												onclick={() => (selectedProjectId = project.id)}
+												class="w-full rounded-lg border p-3 text-left transition-all {selectedProjectId === project.id
+													? 'border-violet-500/50 bg-violet-500/10'
+													: 'border-slate-700/50 bg-[#1a1a1a] hover:border-slate-700'}"
+											>
+												<div class="flex items-center justify-between">
+													<div class="flex-1 min-w-0">
+														<h4 class="text-sm font-medium text-white line-clamp-1">{project.name}</h4>
+														<p class="mt-0.5 text-xs text-slate-400 line-clamp-1">
+															{Object.keys(project.companies || {}).length} companies
+														</p>
+													</div>
+													{#if selectedProjectId === project.id}
+														<div class="ml-2 rounded-full bg-violet-500/20 p-1">
+															<Check class="h-4 w-4 text-violet-400" />
+														</div>
+													{/if}
+												</div>
+											</button>
+										{/each}
+									</div>
+
+									<a
+										href="/app/projects"
+										class="mt-3 block text-center text-sm text-violet-400 hover:text-violet-300"
+									>
+										Create new project
+									</a>
+								{/if}
+							{/snippet}
+							
+							{#snippet loading()}
+								<div class="rounded-lg border border-slate-700/50 bg-[#1a1a1a] p-6 text-center">
+									<div class="flex items-center justify-center gap-2">
+										<Loader2 class="h-4 w-4 animate-spin text-violet-400" />
+										<span class="text-sm text-slate-400">Loading projects...</span>
+									</div>
+								</div>
+							{/snippet}
+						</Collection>
+					{:else}
+						<div class="rounded-lg border border-slate-700/50 bg-[#1a1a1a] p-6 text-center">
+							<div class="flex items-center justify-center gap-2">
+								<Loader2 class="h-4 w-4 animate-spin text-violet-400" />
+								<span class="text-sm text-slate-400">Initializing...</span>
+							</div>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Actions -->
+				<div class="flex gap-3">
+					<button
+						onclick={() => (showAddToProjectModal = false)}
+						disabled={addingToProject}
+						class="flex-1 rounded-lg border border-slate-700/50 bg-slate-800/50 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						Cancel
+					</button>
+					<button
+						onclick={addCompanyToProject}
+						disabled={!selectedProjectId || addingToProject}
+						class="flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						{#if addingToProject}
+							<Loader2 class="h-4 w-4 animate-spin" />
+							<span>Adding...</span>
+						{:else}
+							<span>Add to Project</span>
+						{/if}
+					</button>
+				</div>
+			{/if}
+		</div>
+	</div>
+{/if}

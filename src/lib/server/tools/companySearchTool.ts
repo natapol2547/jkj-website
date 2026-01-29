@@ -112,9 +112,9 @@ const companySearchSchema = z.object({
 		.number()
 		.min(1)
 		.max(30)
-		.default(10)
-		.describe('Number of results (default: 10)'),
-	filters: filtersSchema.describe('Optional filters. Only use when user explicitly requests filtering by status, type, or location.')
+		.default(20)
+		.describe('Number of results (default: 20)'),
+	filters: filtersSchema.describe('Optional filters. Use operating_status, type_of_entity, or location to filter the results. This may give more relevant results.')
 });
 
 /**
@@ -150,8 +150,8 @@ export const companySearchTool = tool(
 				operating_status: result.company.operating_status || 'N/A',
 				// type_of_entity: result.company.type_of_entity || 'N/A',
 				company_website: result.company.website || 'N/A',
-				company_info_link: `${baseURL}/app/company/${result.company._id}`,
-				google_maps_link: `https://www.google.com/maps/search/?api=1&query=${result.company.name + '+' + result.company.address}`,
+				company_info_link: `[ข้อมูลเพิ่มเติม](${baseURL}/app/company/${result.company._id})`,
+				google_maps_link: `[แผนที่](https://www.google.com/maps/search/?api=1&query=${result.company.name + '+' + result.company.address})`,
 				phone: result.company.phone || result.company.telephone || 'N/A',
 				email: result.company.email || 'N/A',
 				relevance_score: Math.round(result.score * 1000) / 1000
@@ -206,6 +206,7 @@ export const companySearchTool = tool(
 
 Examples:
 - "บริษัทขนส่ง" → query: "บริษัทขนส่ง"
+- "โรงแรมในภูเก็ต" → query: "โรงแรม", filters: {location: "ภูเก็ต"}
 - "IT ในกรุงเทพ" → query: "IT", filters: {location: "กรุงเทพมหานคร"}
 - "บริษัทมหาชน อาหาร" → query: "อาหาร", filters: {type_of_entity: "บริษัทมหาชนจำกัด"}`,
 		schema: companySearchSchema

@@ -122,6 +122,8 @@ export async function fullTextSearch(
 
 	const filterClauses = buildSearchFilterClauses(filters, locationCoords);
 
+    console.log('filterClauses', filterClauses);
+
 	// Build the $search stage with compound query
 	const searchStage: any = {
 		$search: {
@@ -163,6 +165,9 @@ export async function fullTextSearch(
 			$limit: limit
 		}
 	];
+
+    console.log('compound filter', searchStage.$search.compound);
+    console.log('pipeline', pipeline);
 
 	const results = await collection.aggregate(pipeline).toArray();
 
@@ -333,7 +338,7 @@ function determineSearchType(query: string, filters?: CompanySearchFilters): 'fu
 	}
 
 	// Longer, more descriptive queries benefit from semantic search
-	if (words.length >= 15) {
+	if (words.length >= 7) {
 		return 'hybrid';
 	}
 

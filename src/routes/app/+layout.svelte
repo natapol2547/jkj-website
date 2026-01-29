@@ -2,8 +2,9 @@
 	import type { LayoutProps } from './$types';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { auth, user } from '$lib/firebase.svelte.js';
+	import { firestore, auth, user, storage, analytics } from '$lib/firebase.svelte.js';
 	import { signOut } from '$lib/auth';
+	import FirebaseApp from '$lib/components/FirebaseApp.svelte';
 	import {
 		Search,
 		FolderKanban,
@@ -57,6 +58,7 @@
 	}
 </script>
 
+<FirebaseApp {firestore} {auth} {storage} {analytics}>
 <div class="flex h-screen bg-[#0f0f0f]" data-theme="jsj-dark">
 	<!-- Sidebar -->
 	<aside
@@ -317,3 +319,4 @@
 		</main>
 	</div>
 </div>
+</FirebaseApp>
