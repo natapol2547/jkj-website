@@ -36,13 +36,13 @@
 	const navItems = [
 		{ href: '/app', icon: Search, label: 'Search', exact: true },
 		{ href: '/app/projects', icon: FolderKanban, label: 'Projects' },
-		{ href: '/app/saved', icon: Bookmark, label: 'Saved Leads' },
+		// { href: '/app/saved', icon: Bookmark, label: 'Saved Leads' },
 		{ href: '/app/history', icon: History, label: 'History' }
 	];
 
 	const bottomNavItems = [
 		{ href: '/app/settings', icon: Settings, label: 'Settings' },
-		{ href: '/app/help', icon: HelpCircle, label: 'Help & Support' }
+		// { href: '/app/help', icon: HelpCircle, label: 'Help & Support' }
 	];
 
 	function isActive(href: string, exact: boolean = false) {

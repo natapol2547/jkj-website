@@ -32,6 +32,7 @@
     import cpLogo from '$lib/assets/logos/cp.png';
     import aisLogo from '$lib/assets/logos/ais.png';
     import trueLogo from '$lib/assets/logos/true.png';
+	import { goto } from '$app/navigation';
 
 	// Pricing Tiers Data
 	const pricingTiers = [
@@ -215,8 +216,8 @@
 
 			<!-- CTA Buttons -->
 			<div class="flex shrink-0 items-center gap-2 md:gap-3">
-				<button class="btn btn-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold md:block whitespace-nowrap">
-					Start Free Pro Trial
+				<button class="btn btn-primary hidden rounded-full px-5 py-2.5 text-sm font-semibold md:block whitespace-nowrap" onclick={() => goto('/app')}>
+					Start Searching
 				</button>
                 {#if user.current}
                 <div class="dropdown dropdown-end">
@@ -265,8 +266,8 @@
 					<a href="#features" class="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-violet-50 hover:text-violet-600">Features</a>
 					<a href="#pricing" class="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-violet-50 hover:text-violet-600">Pricing</a>
 					<a href="#integrations" class="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-violet-50 hover:text-violet-600">Integrations</a>
-					<button class="btn btn-primary mt-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white">
-						Start Free Pro Trial
+					<button class="btn btn-primary mt-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white" onclick={() => goto('/app')}>
+						Start Searching
 					</button>
 				</div>
 			</div>
@@ -290,7 +291,7 @@
 
 			<!-- CTA Button -->
 			<div class="mt-8 md:mt-10">
-				<button class="btn btn-xl btn-primary group inline-flex items-center gap-2 rounded-full px-8 py-4 text-base font-semibold text-white md:text-lg">
+				<button class="btn btn-xl btn-primary group inline-flex items-center gap-2 rounded-full px-8 py-4 text-base font-semibold text-white md:text-lg" onclick={() => goto('/app')}>
 					Start Searching
 					<ArrowRight class="h-5 w-5 transition-transform group-hover:translate-x-1" />
 				</button>
