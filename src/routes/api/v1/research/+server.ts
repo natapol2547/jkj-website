@@ -6,24 +6,29 @@ import type { ResearchRequest, ResearchResult, ResearchDocument } from '$lib/typ
 import { FieldValue } from 'firebase-admin/firestore';
 
 // Maximum concurrent research operations
-const MAX_CONCURRENT = 5;
+const MAX_CONCURRENT = 3;
+
+// Track active research promises to allow awaiting them before serverless freeze
+const activeResearchPromises: Map<string, Promise<void>> = new Map();
 
 /**
  * POST /api/v1/research
  * 
  * Start research on one or more companies in a project
- * Body: { projectId, companyIds[], topic }
+ * Body: { projectId, companyIds[], topic, waitForCompletion?: boolean }
  * 
- * Returns immediately with research IDs, research continues in background
+ * If waitForCompletion is true (default), waits for all research to complete
+ * If false, returns immediately but research may not complete in serverless
  */
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	// Check authentication
 	if (!locals.userID) {
 		return json({ success: false, error: 'Unauthorized' }, { status: 401 });
 	}
 
 	try {
-		const body: ResearchRequest = await request.json();
+		const body: ResearchRequest & { waitForCompletion?: boolean } = await request.json();
+		const waitForCompletion = body.waitForCompletion !== false; // Default to true
 
 		// Validate request
 		if (!body.projectId) {
@@ -48,7 +53,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Verify project exists and user owns it
-        console.log('body.projectId', body.projectId);
+		console.log('body.projectId', body.projectId);
 		const projectRef = adminDB.collection('projects').doc(body.projectId);
 		const projectDoc = await projectRef.get();
 
@@ -98,64 +103,70 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// Create research documents and start research for valid companies
 		const researchResults: ResearchResult[] = [];
+		const backgroundPromises: Promise<void>[] = [];
 
-		// Process in batches to respect concurrency limit
-		for (let i = 0; i < validCompanies.length; i += MAX_CONCURRENT) {
-			const batch = validCompanies.slice(i, i + MAX_CONCURRENT);
-			
-			const batchResults = await Promise.all(
-				batch.map(async ({ id: companyId, data: companyData }) => {
-					try {
-						// Create research document with 'running' status
-						const researchRef = companiesCollection
-							.doc(companyId)
-							.collection('research')
-							.doc();
+		// Process sequentially to avoid overwhelming resources in serverless
+		for (const { id: companyId, data: companyData } of validCompanies) {
+			try {
+				// Create research document with 'running' status
+				const researchRef = companiesCollection
+					.doc(companyId)
+					.collection('research')
+					.doc();
 
-						const initialResearch: Omit<ResearchDocument, 'id'> = {
-							content: '',
-							topic: body.topic,
-							status: 'running',
-							createdAt: FieldValue.serverTimestamp() as any
-						};
+				const initialResearch: Omit<ResearchDocument, 'id'> = {
+					content: '',
+					topic: body.topic,
+					status: 'running',
+					createdAt: FieldValue.serverTimestamp() as any
+				};
 
-						await researchRef.set(initialResearch);
+				await researchRef.set(initialResearch);
 
-						// Start research in background (don't await completion)
-						runResearchInBackground(
-							researchRef,
-							body.topic,
-							companyData.name,
-							{
-								businessdomain: companyData.businessdomain,
-								address: companyData.address
-							},
-							`${body.projectId}_${companyId}_${researchRef.id}`
-						);
+				const researchKey = `${body.projectId}_${companyId}_${researchRef.id}`;
+				
+				// Start research and track the promise
+				const researchPromise = runResearchInBackground(
+					researchRef,
+					body.topic,
+					companyData.name,
+					{
+						businessdomain: companyData.businessdomain,
+						address: companyData.address
+					},
+					researchKey
+				);
+				
+				activeResearchPromises.set(researchKey, researchPromise);
+				backgroundPromises.push(researchPromise);
 
-						return {
-							companyId,
-							researchId: researchRef.id,
-							success: true
-						};
-					} catch (error) {
-						console.error(`Failed to start research for company ${companyId}:`, error);
-						return {
-							companyId,
-							researchId: '',
-							success: false,
-							error: error instanceof Error ? error.message : 'Failed to start research'
-						};
-					}
-				})
-			);
-
-			researchResults.push(...batchResults);
+				researchResults.push({
+					companyId,
+					researchId: researchRef.id,
+					success: true
+				});
+			} catch (error) {
+				console.error(`Failed to start research for company ${companyId}:`, error);
+				researchResults.push({
+					companyId,
+					researchId: '',
+					success: false,
+					error: error instanceof Error ? error.message : 'Failed to start research'
+				});
+			}
 		}
 
 		// Add any failed companies from initial validation
 		const failedResults = await Promise.all(researchPromises);
 		researchResults.push(...failedResults);
+
+		// Wait for all research to complete if requested
+		// This is critical for serverless - without awaiting, the process will freeze
+		if (waitForCompletion && backgroundPromises.length > 0) {
+			console.log(`[Research] Waiting for ${backgroundPromises.length} research tasks to complete...`);
+			await Promise.allSettled(backgroundPromises);
+			console.log(`[Research] All research tasks completed`);
+		}
 
 		// Calculate summary
 		const successful = researchResults.filter(r => r.success).length;
@@ -207,28 +218,28 @@ async function updateWithTimeout(
 }
 
 /**
- * Run research in background and update Firestore with progress
- * Note: In serverless environment, this may be interrupted if the function times out.
- * For production, consider using Vercel background functions or a job queue.
+ * Run research and update Firestore with progress
+ * Now properly awaited to work in serverless environments
  */
 async function runResearchInBackground(
 	researchRef: FirebaseFirestore.DocumentReference,
 	topic: string,
 	companyName: string,
 	companyContext: { businessdomain?: string; address?: string },
-	threadId: string
+	researchKey: string
 ): Promise<void> {
 	let lastSuccessfulContent = '';
+	const startTime = Date.now();
 	
 	try {
-		console.log(`[Research] Starting background research for "${companyName}"`);
+		console.log(`[Research] Starting research for "${companyName}" (key: ${researchKey})`);
 
 		const result = await streamDeepResearch({
 			topic,
 			companyName,
 			companyContext,
-			threadId,
-			recursionLimit: 25,
+			threadId: researchKey,
+			recursionLimit: 20, // Reduced to prevent timeout
 			onProgress: async (content: string, isComplete: boolean) => {
 				// Update Firestore with progress using timeout protection
 				const updateData: Record<string, any> = { content };
@@ -251,20 +262,21 @@ async function runResearchInBackground(
 		let retries = 3;
 		while (retries > 0) {
 			const success = await updateWithTimeout(researchRef, {
-				content: result.content,
+				content: result.content || lastSuccessfulContent,
 				status: 'completed',
 				completedAt: FieldValue.serverTimestamp()
 			}, 15000);
 			
 			if (success) {
-				console.log(`[Research] Completed research for "${companyName}"`);
+				const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+				console.log(`[Research] Completed research for "${companyName}" in ${elapsed}s`);
 				return;
 			}
 			
 			retries--;
 			if (retries > 0) {
 				console.log(`[Research] Retrying final update for "${companyName}" (${retries} retries left)`);
-				await new Promise(resolve => setTimeout(resolve, 2000));
+				await new Promise(resolve => setTimeout(resolve, 1000));
 			}
 		}
 		
@@ -279,6 +291,9 @@ async function runResearchInBackground(
 			error: error instanceof Error ? error.message : 'Research failed',
 			completedAt: FieldValue.serverTimestamp()
 		}, 10000);
+	} finally {
+		// Clean up tracking
+		activeResearchPromises.delete(researchKey);
 	}
 }
 

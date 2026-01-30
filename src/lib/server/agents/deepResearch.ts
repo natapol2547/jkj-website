@@ -249,7 +249,11 @@ export async function streamDeepResearch(options: DeepResearchOptions): Promise<
 		onProgress 
 	} = options;
 
+	console.log(`[DeepResearch] Creating agent for "${companyName}"...`);
+	const agentStartTime = Date.now();
+	
 	const agent = await createDeepResearchAgent(apiKey, recursionLimit);
+	console.log(`[DeepResearch] Agent created in ${Date.now() - agentStartTime}ms`);
 
 	const config = {
 		configurable: {
@@ -266,20 +270,35 @@ export async function streamDeepResearch(options: DeepResearchOptions): Promise<
 
 	console.log(`[DeepResearch] Starting streaming research for "${companyName}" with topic: "${topic}"`);
 
-	// Stream the agent response
+	// Stream the agent response with timeout protection
+	const streamStartTime = Date.now();
+	console.log(`[DeepResearch] Initiating stream...`);
+	
 	const stream = await agent.stream(input, {
 		...config,
 		streamMode: 'values'
 	});
+	console.log(`[DeepResearch] Stream initiated in ${Date.now() - streamStartTime}ms`);
 
 	let lastContent = '';
 	let allMessages: any[] = [];
 	let lastUpdateTime = Date.now();
+	let chunkCount = 0;
 	const UPDATE_INTERVAL = 5000; // 5 seconds
+	const OVERALL_TIMEOUT = 180000; // 3 minutes max for entire research
 
 	for await (const chunk of stream) {
+		chunkCount++;
+		
+		// Check for overall timeout
+		if (Date.now() - streamStartTime > OVERALL_TIMEOUT) {
+			console.warn(`[DeepResearch] Research timeout after ${OVERALL_TIMEOUT}ms for "${companyName}"`);
+			break;
+		}
+		
 		if (chunk.messages) {
 			allMessages = chunk.messages;
+			console.log(`[DeepResearch] Chunk ${chunkCount}: ${allMessages.length} messages`);
 			
 			// Extract current content
 			const currentContent = extractFinalContent(allMessages);
@@ -291,7 +310,11 @@ export async function streamDeepResearch(options: DeepResearchOptions): Promise<
 				lastUpdateTime = now;
 				
 				if (onProgress && currentContent) {
-					await onProgress(currentContent, false);
+					try {
+						await onProgress(currentContent, false);
+					} catch (err) {
+						console.warn(`[DeepResearch] Progress callback failed:`, err);
+					}
 				}
 			}
 		}
@@ -299,13 +322,18 @@ export async function streamDeepResearch(options: DeepResearchOptions): Promise<
 
 	// Final content extraction
 	const finalContent = extractFinalContent(allMessages);
+	console.log(`[DeepResearch] Stream completed with ${chunkCount} chunks, content length: ${finalContent.length}`);
 	
 	// Send final update
 	if (onProgress && finalContent) {
-		await onProgress(finalContent, true);
+		try {
+			await onProgress(finalContent, true);
+		} catch (err) {
+			console.warn(`[DeepResearch] Final progress callback failed:`, err);
+		}
 	}
 
-	console.log(`[DeepResearch] Completed streaming research for "${companyName}"`);
+	console.log(`[DeepResearch] Completed streaming research for "${companyName}" in ${Date.now() - streamStartTime}ms`);
 
 	return {
 		content: finalContent,

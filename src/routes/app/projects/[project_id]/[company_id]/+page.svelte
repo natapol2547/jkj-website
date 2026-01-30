@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import Doc from '$lib/components/Doc.svelte';
 	import Collection from '$lib/components/Collection.svelte';
 	import { getFirebaseContext } from '$lib/stores/sdk.svelte';
@@ -30,8 +30,8 @@
 	const { firestore } = getFirebaseContext();
 
 	// Get IDs from URL
-	const projectId = $derived($page.params.project_id || '');
-	const companyId = $derived($page.params.company_id || '');
+	const projectId = $derived(page.params.project_id || '');
+	const companyId = $derived(page.params.company_id || '');
 	
 	// Build refs
 	const projectRef = $derived(`projects/${projectId}`);
@@ -178,7 +178,7 @@
 			<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 				<div class="flex-1 min-w-0">
 					<div class="flex items-center gap-3 mb-2">
-						<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600/30 to-purple-600/30">
+						<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-violet-600/30 to-purple-600/30">
 							<Building2 class="h-6 w-6 text-violet-400" />
 						</div>
 						<div>
@@ -214,7 +214,7 @@
 	<div class="px-4 py-6 md:px-8">
 		<div class="mx-auto max-w-5xl space-y-6">
 			<!-- Start Research Section -->
-			<div class="rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-900/20 to-purple-900/20 p-6">
+			<div class="rounded-xl border border-violet-500/30 bg-linear-to-br from-violet-900/20 to-purple-900/20 p-6">
 				<div class="flex items-center gap-3 mb-4">
 					<div class="rounded-lg bg-violet-500/20 p-2">
 						<Sparkles class="h-5 w-5 text-violet-400" />

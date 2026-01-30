@@ -278,7 +278,6 @@
 		if (message.parts.length === 0) return null;
 		const lastPart = getLastAIPart(message);
 		if (lastPart?.type === 'text' && lastPart.text.length > 0 && !isIndexArrayText(lastPart.text)) {
-			console.log('lastAIResponse', lastPart.text);
 			return lastPart.text;
 		}
 		return null;
