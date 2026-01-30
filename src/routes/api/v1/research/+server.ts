@@ -6,15 +6,80 @@ import type { ResearchRequest, ResearchResult, ResearchDocument } from '$lib/typ
 import { FieldValue } from 'firebase-admin/firestore';
 
 /**
+ * Run research for a single company and update Firestore
+ */
+async function runResearchForCompany(
+	researchRef: FirebaseFirestore.DocumentReference,
+	topic: string,
+	companyName: string,
+	companyContext: { businessdomain?: string; address?: string },
+	threadId: string
+): Promise<void> {
+	const startTime = Date.now();
+	let lastContent = '';
+
+	try {
+		console.log(`[Research] Starting research for "${companyName}"`);
+
+		const result = await streamDeepResearch({
+			topic,
+			companyName,
+			companyContext,
+			threadId,
+			recursionLimit: 15,
+			onProgress: async (content: string, isComplete: boolean) => {
+				lastContent = content;
+				try {
+					await researchRef.update({
+						content,
+						...(isComplete && {
+							status: 'completed',
+							completedAt: FieldValue.serverTimestamp()
+						})
+					});
+				} catch (err) {
+					console.warn(`[Research] Progress update failed for "${companyName}":`, err);
+				}
+			}
+		});
+
+		// Ensure final status is saved
+		await researchRef.update({
+			content: result.content || lastContent,
+			status: 'completed',
+			completedAt: FieldValue.serverTimestamp()
+		});
+
+		const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+		console.log(`[Research] Completed research for "${companyName}" in ${elapsed}s`);
+
+	} catch (error) {
+		console.error(`[Research] Failed for "${companyName}":`, error);
+
+		// Update status to failed
+		try {
+			await researchRef.update({
+				content: lastContent,
+				status: 'failed',
+				error: error instanceof Error ? error.message : 'Research failed',
+				completedAt: FieldValue.serverTimestamp()
+			});
+		} catch (updateErr) {
+			console.error(`[Research] Failed to update error status for "${companyName}":`, updateErr);
+		}
+	}
+}
+
+/**
  * POST /api/v1/research
  * 
- * Start research on one or more companies in a project using SSE streaming.
+ * Start research on one or more companies in a project.
  * Body: { projectId, companyIds[], topic }
  * 
- * Returns a Server-Sent Events stream with progress updates.
- * This keeps the connection alive and prevents Vercel function timeout.
+ * Uses Vercel's waitUntil to run research in background after response is sent.
+ * Returns immediately with research IDs.
  */
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	// Check authentication
 	if (!locals.userID) {
 		return json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -71,147 +136,109 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			body.companyIds.map(id => companiesCollection.doc(id).get())
 		);
 
-		// Filter valid companies
-		const validCompanies: { id: string; data: any }[] = [];
-		const invalidCompanyIds: string[] = [];
+		// Create research documents and collect results
+		const researchResults: ResearchResult[] = [];
+		const backgroundTasks: Promise<void>[] = [];
 
 		for (let i = 0; i < companyDocs.length; i++) {
 			const doc = companyDocs[i];
 			const companyId = body.companyIds[i];
 
 			if (!doc.exists) {
-				invalidCompanyIds.push(companyId);
+				researchResults.push({
+					companyId,
+					researchId: '',
+					success: false,
+					error: 'Company not found in project'
+				});
 				continue;
 			}
 
-			validCompanies.push({ id: companyId, data: doc.data() });
-		}
+			const companyData = doc.data()!;
 
-		// Create SSE stream
-		const stream = new ReadableStream({
-			async start(controller) {
-				const encoder = new TextEncoder();
-				
-				// Helper to send SSE event
-				const sendEvent = (event: string, data: any) => {
-					const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-					controller.enqueue(encoder.encode(message));
+			try {
+				// Create research document with 'running' status
+				const researchRef = companiesCollection
+					.doc(companyId)
+					.collection('research')
+					.doc();
+
+				const initialResearch: Omit<ResearchDocument, 'id'> = {
+					content: '',
+					topic: body.topic,
+					status: 'running',
+					createdAt: FieldValue.serverTimestamp() as any
 				};
 
-				// Send initial status
-				sendEvent('init', {
-					totalCompanies: validCompanies.length,
-					invalidCompanies: invalidCompanyIds,
-					topic: body.topic
+				await researchRef.set(initialResearch);
+
+				// Queue background task for research
+				const researchTask = runResearchForCompany(
+					researchRef,
+					body.topic,
+					companyData.name,
+					{
+						businessdomain: companyData.businessdomain,
+						address: companyData.address
+					},
+					`${body.projectId}_${companyId}_${researchRef.id}`
+				);
+
+				backgroundTasks.push(researchTask);
+
+				researchResults.push({
+					companyId,
+					researchId: researchRef.id,
+					success: true
 				});
 
-				// Process each company sequentially
-				for (let i = 0; i < validCompanies.length; i++) {
-					const { id: companyId, data: companyData } = validCompanies[i];
-					
-					try {
-						// Create research document
-						const researchRef = companiesCollection
-							.doc(companyId)
-							.collection('research')
-							.doc();
-
-						const initialResearch: Omit<ResearchDocument, 'id'> = {
-							content: '',
-							topic: body.topic,
-							status: 'running',
-							createdAt: FieldValue.serverTimestamp() as any
-						};
-
-						await researchRef.set(initialResearch);
-
-						sendEvent('research_started', {
-							companyId,
-							companyName: companyData.name,
-							researchId: researchRef.id,
-							index: i + 1,
-							total: validCompanies.length
-						});
-
-						// Run research with progress updates
-						const result = await streamDeepResearch({
-							topic: body.topic,
-							companyName: companyData.name,
-							companyContext: {
-								businessdomain: companyData.businessdomain,
-								address: companyData.address
-							},
-							threadId: `${body.projectId}_${companyId}_${researchRef.id}`,
-							recursionLimit: 15, // Reduced to ensure completion
-							onProgress: async (content: string, isComplete: boolean) => {
-								// Send progress to client
-								sendEvent('progress', {
-									companyId,
-									companyName: companyData.name,
-									contentLength: content.length,
-									isComplete
-								});
-
-								// Update Firestore
-								try {
-									await researchRef.update({
-										content,
-										...(isComplete && {
-											status: 'completed',
-											completedAt: FieldValue.serverTimestamp()
-										})
-									});
-								} catch (err) {
-									console.warn(`[Research] Firestore update failed:`, err);
-								}
-							}
-						});
-
-						// Ensure final status is saved
-						await researchRef.update({
-							content: result.content,
-							status: 'completed',
-							completedAt: FieldValue.serverTimestamp()
-						});
-
-						sendEvent('research_completed', {
-							companyId,
-							companyName: companyData.name,
-							researchId: researchRef.id,
-							contentLength: result.content.length
-						});
-
-					} catch (error) {
-						console.error(`[Research] Failed for ${companyData.name}:`, error);
-						
-						sendEvent('research_failed', {
-							companyId,
-							companyName: companyData.name,
-							error: error instanceof Error ? error.message : 'Research failed'
-						});
-					}
-
-					// Small delay between companies to prevent rate limiting
-					if (i < validCompanies.length - 1) {
-						await new Promise(resolve => setTimeout(resolve, 500));
-					}
-				}
-
-				// Send completion event
-				sendEvent('done', {
-					message: 'All research completed',
-					processedCount: validCompanies.length
+			} catch (error) {
+				console.error(`Failed to create research for company ${companyId}:`, error);
+				researchResults.push({
+					companyId,
+					researchId: '',
+					success: false,
+					error: error instanceof Error ? error.message : 'Failed to start research'
 				});
-
-				controller.close();
 			}
-		});
+		}
 
-		return new Response(stream, {
-			headers: {
-				'Content-Type': 'text/event-stream',
-				'Cache-Control': 'no-cache',
-				'Connection': 'keep-alive'
+		// Use Vercel's waitUntil to run research in background
+		// This keeps the function alive after the response is sent
+		if (backgroundTasks.length > 0) {
+			const allResearch = Promise.all(backgroundTasks).then(() => {
+				console.log(`[Research] All ${backgroundTasks.length} research tasks completed`);
+			}).catch((err) => {
+				console.error('[Research] Background research failed:', err);
+			});
+
+			// Use platform.context.waitUntil for Vercel adapter
+			// Type assertion needed because SvelteKit's Platform type may not include Vercel's context
+			const vercelPlatform = platform as { context?: { waitUntil?: (promise: Promise<unknown>) => void } } | undefined;
+			
+			if (vercelPlatform?.context?.waitUntil) {
+				console.log('[Research] Using Vercel waitUntil for background processing');
+				vercelPlatform.context.waitUntil(allResearch);
+			} else {
+				// Fallback: log warning but don't block
+				console.warn('[Research] waitUntil not available - research may not complete in serverless');
+				// Still run in background, but may be terminated
+				allResearch.catch(console.error);
+			}
+		}
+
+		// Calculate summary
+		const successful = researchResults.filter(r => r.success).length;
+		const failed = researchResults.filter(r => !r.success).length;
+
+		// Return immediately - research continues in background via waitUntil
+		return json({
+			success: true,
+			results: researchResults,
+			summary: {
+				total: researchResults.length,
+				successful,
+				failed
 			}
 		});
 

@@ -42,7 +42,6 @@
 	let researchTopic = $state('');
 	let isResearching = $state(false);
 	let researchError = $state<string | null>(null);
-	let researchProgress = $state<string>('');
 	let expandedResearch = $state<Set<string>>(new Set());
 
 	// Research topic suggestions
@@ -55,13 +54,12 @@
 		'Research market position and competitors'
 	];
 
-	// Start research for this company using SSE stream
+	// Start research for this company
 	async function startResearch() {
 		if (!researchTopic.trim()) return;
 
 		isResearching = true;
 		researchError = null;
-		researchProgress = 'Initializing...';
 
 		try {
 			const response = await fetch('/api/v1/research', {
@@ -74,86 +72,29 @@
 				})
 			});
 
-			// Check if it's a JSON error response
-			const contentType = response.headers.get('content-type');
-			if (contentType?.includes('application/json')) {
-				const result = await response.json();
-				if (!result.success) {
-					researchError = result.error || 'Failed to start research';
-					return;
-				}
+			const result = await response.json();
+
+			if (!result.success) {
+				researchError = result.error || 'Failed to start research';
+				return;
 			}
 
-			// Handle SSE stream
-			if (contentType?.includes('text/event-stream')) {
-				const reader = response.body?.getReader();
-				const decoder = new TextDecoder();
-
-				if (!reader) {
-					researchError = 'Failed to read response stream';
-					return;
-				}
-
-				let buffer = '';
-				
-				while (true) {
-					const { done, value } = await reader.read();
-					
-					if (done) break;
-					
-					buffer += decoder.decode(value, { stream: true });
-					
-					// Parse SSE events from buffer
-					const lines = buffer.split('\n');
-					buffer = lines.pop() || ''; // Keep incomplete line in buffer
-					
-					let currentEvent = '';
-					let currentData = '';
-					
-					for (const line of lines) {
-						if (line.startsWith('event: ')) {
-							currentEvent = line.slice(7);
-						} else if (line.startsWith('data: ')) {
-							currentData = line.slice(6);
-							
-							try {
-								const data = JSON.parse(currentData);
-								
-								switch (currentEvent) {
-									case 'init':
-										researchProgress = `Starting research for ${data.totalCompanies} company...`;
-										break;
-									case 'research_started':
-										researchProgress = `Researching: ${data.companyName}...`;
-										break;
-									case 'progress':
-										researchProgress = `${data.companyName}: ${data.contentLength} characters generated...`;
-										break;
-									case 'research_completed':
-										researchProgress = `Completed: ${data.companyName}`;
-										break;
-									case 'research_failed':
-										researchError = `Failed: ${data.error}`;
-										break;
-									case 'done':
-										researchProgress = '';
-										researchTopic = ''; // Clear on success
-										break;
-								}
-							} catch (e) {
-								console.warn('Failed to parse SSE data:', currentData);
-							}
-						}
-					}
-				}
+			// Check if any research failed to start
+			const failedResults = result.results.filter((r: any) => !r.success);
+			if (failedResults.length > 0) {
+				researchError = failedResults[0].error || 'Failed to start research';
+				return;
 			}
+
+			// Clear the topic input on success
+			// Research is running in background via waitUntil - results will appear via Firestore listener
+			researchTopic = '';
 
 		} catch (err) {
 			console.error('Failed to start research:', err);
 			researchError = err instanceof Error ? err.message : 'Failed to start research';
 		} finally {
 			isResearching = false;
-			researchProgress = '';
 		}
 	}
 
@@ -321,16 +262,6 @@
 						<div class="flex items-center gap-2 text-sm text-red-400">
 							<XCircle class="h-4 w-4" />
 							{researchError}
-						</div>
-					</div>
-				{/if}
-
-				<!-- Research Progress -->
-				{#if researchProgress}
-					<div class="mb-4 rounded-lg border border-violet-500/50 bg-violet-500/10 p-3">
-						<div class="flex items-center gap-2 text-sm text-violet-400">
-							<Loader2 class="h-4 w-4 animate-spin" />
-							{researchProgress}
 						</div>
 					</div>
 				{/if}
