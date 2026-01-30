@@ -189,7 +189,7 @@
 </script>
 
 <svelte:head>
-	<title>Operetta - Connect Your Tech Stack</title>
+	<title>Operetta - AI Search Engine for Thailand</title>
 	<meta name="description" content="Integrate with your sales and marketing stack in under 30 seconds. Your apps deserve a real relationship without the drama." />
 </svelte:head>
 
