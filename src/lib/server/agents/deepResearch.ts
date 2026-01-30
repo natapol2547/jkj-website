@@ -2,7 +2,7 @@ import { StateGraph, MessagesAnnotation, START, END } from "@langchain/langgraph
 import { MongoDBSaver } from "@langchain/langgraph-checkpoint-mongodb";
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import { tools } from '../tools/index';
-import { client } from '../mongo';
+import { getConnectedClient } from '../mongo';
 import { createLLM } from '../llm';
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import type { Company } from '../types/company';
@@ -49,15 +49,26 @@ Structure your final report in Markdown with clear sections:
 Respond in the same language as the user's request (Thai or English).
 Use proper Markdown formatting including headers, bullet points, and links.`;
 
-// Memory checkpointer for research sessions
-const checkpointer = new MongoDBSaver({ client: client as any, dbName: 'research_history' });
+// Lazy checkpointer creation to handle serverless connection issues
+let checkpointer: MongoDBSaver | null = null;
+
+async function getCheckpointer(): Promise<MongoDBSaver> {
+	const client = await getConnectedClient();
+	if (!checkpointer) {
+		checkpointer = new MongoDBSaver({ client: client as any, dbName: 'research_history' });
+	}
+	return checkpointer;
+}
 
 /**
  * Create the deep research agent
  */
-function createDeepResearchAgent(apiKey?: string, recursionLimit: number = 25) {
+async function createDeepResearchAgent(apiKey?: string, recursionLimit: number = 25) {
 	// Use a capable model for research tasks
 	const model = createLLM('google/gemini-2.0-flash-001', 8192, 0.3, apiKey);
+
+	// Get the checkpointer (ensures MongoDB connection is established)
+	const saver = await getCheckpointer();
 
 	// Define the agent node with recursion limit awareness
 	async function callModel(state: typeof MessagesAnnotation.State, config: any) {
@@ -115,7 +126,7 @@ function createDeepResearchAgent(apiKey?: string, recursionLimit: number = 25) {
 		.addEdge('tools', 'agent');
 
 	// Compile the graph with checkpointer
-	const agent = workflow.compile({ checkpointer });
+	const agent = workflow.compile({ checkpointer: saver });
 
 	return agent;
 }
@@ -194,7 +205,7 @@ export async function runDeepResearch(options: DeepResearchOptions): Promise<{ c
 		recursionLimit = 25 
 	} = options;
 
-	const agent = createDeepResearchAgent(apiKey, recursionLimit);
+	const agent = await createDeepResearchAgent(apiKey, recursionLimit);
 
 	const config = {
 		configurable: {
@@ -238,7 +249,7 @@ export async function streamDeepResearch(options: DeepResearchOptions): Promise<
 		onProgress 
 	} = options;
 
-	const agent = createDeepResearchAgent(apiKey, recursionLimit);
+	const agent = await createDeepResearchAgent(apiKey, recursionLimit);
 
 	const config = {
 		configurable: {
@@ -306,6 +317,7 @@ export async function streamDeepResearch(options: DeepResearchOptions): Promise<
  * Get research history for a thread
  */
 export async function getResearchHistory(threadId: string) {
-	const state = await checkpointer.get({ configurable: { thread_id: threadId } });
+	const saver = await getCheckpointer();
+	const state = await saver.get({ configurable: { thread_id: threadId } });
 	return state?.channel_values?.messages || [];
 }

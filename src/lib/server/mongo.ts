@@ -4,21 +4,53 @@ import type { Company } from './types/company';
 
 const uri = MONGODB_URI;
 
-// MongoDB client with connection pooling
-const client = new MongoClient(uri);
+// MongoDB client with connection pooling for serverless
+const client = new MongoClient(uri, {
+	maxPoolSize: 10,
+	minPoolSize: 1,
+	maxIdleTimeMS: 30000,
+	serverSelectionTimeoutMS: 10000,
+	socketTimeoutMS: 45000,
+});
 
-// Connection state
-let isConnected = false;
+// Connection promise for singleton pattern
+let connectionPromise: Promise<MongoClient> | null = null;
+
+/**
+ * Get connected MongoDB client (lazy connection with reconnection support)
+ * This handles serverless connection issues by checking topology state
+ */
+export async function getConnectedClient(): Promise<MongoClient> {
+	// Check if client topology is closed and needs reconnection
+	try {
+		// Ping to verify connection is alive
+		await client.db('admin').command({ ping: 1 });
+		return client;
+	} catch (error) {
+		// Connection is stale or closed, need to reconnect
+		console.log('MongoDB connection stale, reconnecting...');
+		connectionPromise = null;
+	}
+
+	if (!connectionPromise) {
+		connectionPromise = client.connect().then(() => {
+			console.log('Connected to MongoDB');
+			return client;
+		}).catch((err) => {
+			connectionPromise = null;
+			throw err;
+		});
+	}
+
+	return connectionPromise;
+}
 
 /**
  * Connect to MongoDB if not already connected
+ * @deprecated Use getConnectedClient() instead for better serverless support
  */
 export async function connectToMongo(): Promise<void> {
-	if (!isConnected) {
-		await client.connect();
-		isConnected = true;
-		console.log('Connected to MongoDB');
-	}
+	await getConnectedClient();
 }
 
 /**
@@ -62,10 +94,12 @@ export async function getCompanyById(documentId: string): Promise<Company | null
  * Close the MongoDB connection
  */
 export async function closeMongo(): Promise<void> {
-	if (isConnected) {
+	try {
 		await client.close();
-		isConnected = false;
+		connectionPromise = null;
 		console.log('Disconnected from MongoDB');
+	} catch (error) {
+		console.error('Error closing MongoDB connection:', error);
 	}
 }
 

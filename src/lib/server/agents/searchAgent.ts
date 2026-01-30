@@ -2,7 +2,7 @@ import { StateGraph, MessagesAnnotation, START, END } from "@langchain/langgraph
 import { MongoDBSaver } from "@langchain/langgraph-checkpoint-mongodb";
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import { tools } from '../tools/index';
-import { client } from '../mongo';
+import { getConnectedClient } from '../mongo';
 import { createLLM } from '../llm';
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 
@@ -15,15 +15,26 @@ Use 'internet_search' tool to find general information.
 
 Respond in user's language (Thai/English). Use Markdown. Every link should be in "[link text](link url)" format. Relative links are allowed.`;
 
-// Memory checkpointer for conversation history
-const checkpointer = new MongoDBSaver({ client: client as any, dbName: 'conversation_history' });
+// Lazy checkpointer creation to handle serverless connection issues
+let checkpointer: MongoDBSaver | null = null;
+
+async function getCheckpointer(): Promise<MongoDBSaver> {
+	const client = await getConnectedClient();
+	if (!checkpointer) {
+		checkpointer = new MongoDBSaver({ client: client as any, dbName: 'conversation_history' });
+	}
+	return checkpointer;
+}
 
 /**
  * Create the search agent with the company search tool
  */
-function createSearchAgent(apiKey?: string, recursionLimit: number = 10) {
+async function createSearchAgent(apiKey?: string, recursionLimit: number = 10) {
 	// Use OpenRouter as the LLM provider (OpenAI-compatible API)
 	const model = createLLM('openai/gpt-oss-120b:nitro', 4096, 0.5, apiKey);
+
+	// Get the checkpointer (ensures MongoDB connection is established)
+	const saver = await getCheckpointer();
 
 	// Define the agent node with recursion limit awareness
 	async function callModel(state: typeof MessagesAnnotation.State, config: any) {
@@ -81,7 +92,7 @@ function createSearchAgent(apiKey?: string, recursionLimit: number = 10) {
 		.addEdge('tools', 'agent');
 
 	// Compile the graph with checkpointer
-	const agent = workflow.compile({ checkpointer });
+	const agent = workflow.compile({ checkpointer: saver });
 
 	return agent;
 }
@@ -99,7 +110,7 @@ export interface SearchAgentOptions {
 export async function runSearchAgent(options: SearchAgentOptions) {
 	const { query, threadId = 'default', apiKey, recursionLimit = 10 } = options;
 
-	const agent = createSearchAgent(apiKey, recursionLimit);
+	const agent = await createSearchAgent(apiKey, recursionLimit);
 
 	const config = {
 		configurable: {
@@ -124,7 +135,7 @@ export async function runSearchAgent(options: SearchAgentOptions) {
 export async function streamSearchAgent(options: SearchAgentOptions) {
 	const { query, threadId = 'default', apiKey, recursionLimit = 10 } = options;
 
-	const agent = createSearchAgent(apiKey, recursionLimit);
+	const agent = await createSearchAgent(apiKey, recursionLimit);
 
 	const config = {
 		configurable: {
@@ -150,6 +161,7 @@ export async function streamSearchAgent(options: SearchAgentOptions) {
  * Get conversation history for a thread
  */
 export async function getConversationHistory(threadId: string) {
-	const state = await checkpointer.get({ configurable: { thread_id: threadId } });
+	const saver = await getCheckpointer();
+	const state = await saver.get({ configurable: { thread_id: threadId } });
 	return state?.channel_values?.messages || [];
 }

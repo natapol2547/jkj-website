@@ -183,6 +183,30 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 };
 
 /**
+ * Helper to update Firestore with timeout protection
+ */
+async function updateWithTimeout(
+	researchRef: FirebaseFirestore.DocumentReference,
+	data: Record<string, any>,
+	timeoutMs: number = 10000
+): Promise<boolean> {
+	try {
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			setTimeout(() => reject(new Error('Firestore update timeout')), timeoutMs);
+		});
+		
+		await Promise.race([
+			researchRef.update(data),
+			timeoutPromise
+		]);
+		return true;
+	} catch (error) {
+		console.error('[Research] Firestore update failed:', error);
+		return false;
+	}
+}
+
+/**
  * Run research in background and update Firestore with progress
  * Note: In serverless environment, this may be interrupted if the function times out.
  * For production, consider using Vercel background functions or a job queue.
@@ -194,6 +218,8 @@ async function runResearchInBackground(
 	companyContext: { businessdomain?: string; address?: string },
 	threadId: string
 ): Promise<void> {
+	let lastSuccessfulContent = '';
+	
 	try {
 		console.log(`[Research] Starting background research for "${companyName}"`);
 
@@ -204,43 +230,55 @@ async function runResearchInBackground(
 			threadId,
 			recursionLimit: 25,
 			onProgress: async (content: string, isComplete: boolean) => {
-				try {
-					// Update Firestore with progress
-					await researchRef.update({
-						content,
-						...(isComplete && { 
-							status: 'completed',
-							completedAt: FieldValue.serverTimestamp()
-						})
-					});
+				// Update Firestore with progress using timeout protection
+				const updateData: Record<string, any> = { content };
+				if (isComplete) {
+					updateData.status = 'completed';
+					updateData.completedAt = FieldValue.serverTimestamp();
+				}
+				
+				const success = await updateWithTimeout(researchRef, updateData);
+				if (success) {
+					lastSuccessfulContent = content;
 					console.log(`[Research] Updated progress for "${companyName}" (complete: ${isComplete})`);
-				} catch (err) {
-					console.error(`[Research] Failed to update progress for "${companyName}":`, err);
+				} else {
+					console.warn(`[Research] Progress update skipped for "${companyName}" due to timeout`);
 				}
 			}
 		});
 
-		// Ensure final status is set
-		await researchRef.update({
-			content: result.content,
-			status: 'completed',
-			completedAt: FieldValue.serverTimestamp()
-		});
-
-		console.log(`[Research] Completed research for "${companyName}"`);
+		// Ensure final status is set with retry logic
+		let retries = 3;
+		while (retries > 0) {
+			const success = await updateWithTimeout(researchRef, {
+				content: result.content,
+				status: 'completed',
+				completedAt: FieldValue.serverTimestamp()
+			}, 15000);
+			
+			if (success) {
+				console.log(`[Research] Completed research for "${companyName}"`);
+				return;
+			}
+			
+			retries--;
+			if (retries > 0) {
+				console.log(`[Research] Retrying final update for "${companyName}" (${retries} retries left)`);
+				await new Promise(resolve => setTimeout(resolve, 2000));
+			}
+		}
+		
+		console.error(`[Research] Failed to save final result for "${companyName}" after all retries`);
 	} catch (error) {
 		console.error(`[Research] Research failed for "${companyName}":`, error);
 		
-		// Update status to failed
-		try {
-			await researchRef.update({
-				status: 'failed',
-				error: error instanceof Error ? error.message : 'Research failed',
-				completedAt: FieldValue.serverTimestamp()
-			});
-		} catch (updateErr) {
-			console.error(`[Research] Failed to update error status for "${companyName}":`, updateErr);
-		}
+		// Update status to failed with timeout protection
+		await updateWithTimeout(researchRef, {
+			status: 'failed',
+			content: lastSuccessfulContent || '',
+			error: error instanceof Error ? error.message : 'Research failed',
+			completedAt: FieldValue.serverTimestamp()
+		}, 10000);
 	}
 }
 
