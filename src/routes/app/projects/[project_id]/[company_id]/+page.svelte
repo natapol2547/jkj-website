@@ -87,9 +87,8 @@
 			}
 
 			// Clear the topic input on success
-			// Research is running in background via waitUntil - results will appear via Firestore listener
+			// Research is now running in the background via waitUntil
 			researchTopic = '';
-
 		} catch (err) {
 			console.error('Failed to start research:', err);
 			researchError = err instanceof Error ? err.message : 'Failed to start research';
@@ -274,12 +273,16 @@
 				>
 					{#if isResearching}
 						<Loader2 class="h-4 w-4 animate-spin" />
-						Researching...
+						Starting...
 					{:else}
 						<Play class="h-4 w-4" />
 						Start Research
 					{/if}
 				</button>
+				
+				<p class="mt-2 text-xs text-slate-500">
+					Research runs in the background. Results will appear below when ready.
+				</p>
 			</div>
 
 			<!-- Research History -->

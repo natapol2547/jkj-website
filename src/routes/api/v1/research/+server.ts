@@ -4,11 +4,12 @@ import { adminDB } from '$lib/server/admin';
 import { streamDeepResearch } from '$lib/server/agents/deepResearch';
 import type { ResearchRequest, ResearchResult, ResearchDocument } from '$lib/types/project';
 import { FieldValue } from 'firebase-admin/firestore';
+import { waitUntil } from '@vercel/functions';
 
 /**
  * Run research for a single company and update Firestore
  */
-async function runResearchForCompany(
+async function runResearch(
 	researchRef: FirebaseFirestore.DocumentReference,
 	topic: string,
 	companyName: string,
@@ -37,8 +38,9 @@ async function runResearchForCompany(
 							completedAt: FieldValue.serverTimestamp()
 						})
 					});
+					console.log(`[Research] Progress update for "${companyName}" (${content.length} chars)`);
 				} catch (err) {
-					console.warn(`[Research] Progress update failed for "${companyName}":`, err);
+					console.warn(`[Research] Firestore progress update failed:`, err);
 				}
 			}
 		});
@@ -51,7 +53,7 @@ async function runResearchForCompany(
 		});
 
 		const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-		console.log(`[Research] Completed research for "${companyName}" in ${elapsed}s`);
+		console.log(`[Research] Completed "${companyName}" in ${elapsed}s`);
 
 	} catch (error) {
 		console.error(`[Research] Failed for "${companyName}":`, error);
@@ -59,13 +61,13 @@ async function runResearchForCompany(
 		// Update status to failed
 		try {
 			await researchRef.update({
-				content: lastContent,
+				content: lastContent || '',
 				status: 'failed',
 				error: error instanceof Error ? error.message : 'Research failed',
 				completedAt: FieldValue.serverTimestamp()
 			});
 		} catch (updateErr) {
-			console.error(`[Research] Failed to update error status for "${companyName}":`, updateErr);
+			console.error(`[Research] Failed to update error status:`, updateErr);
 		}
 	}
 }
@@ -76,10 +78,9 @@ async function runResearchForCompany(
  * Start research on one or more companies in a project.
  * Body: { projectId, companyIds[], topic }
  * 
- * Uses Vercel's waitUntil to run research in background after response is sent.
- * Returns immediately with research IDs.
+ * Returns immediately with research IDs, research continues in background using waitUntil.
  */
-export const POST: RequestHandler = async ({ request, locals, platform }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
 	// Check authentication
 	if (!locals.userID) {
 		return json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -111,7 +112,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		}
 
 		// Verify project exists and user owns it
-		console.log('body.projectId', body.projectId);
+		console.log('[Research] Starting for project:', body.projectId);
 		const projectRef = adminDB.collection('projects').doc(body.projectId);
 		const projectDoc = await projectRef.get();
 
@@ -138,7 +139,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 		// Create research documents and collect results
 		const researchResults: ResearchResult[] = [];
-		const backgroundTasks: Promise<void>[] = [];
+		const researchTasks: Promise<void>[] = [];
 
 		for (let i = 0; i < companyDocs.length; i++) {
 			const doc = companyDocs[i];
@@ -172,8 +173,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 				await researchRef.set(initialResearch);
 
-				// Queue background task for research
-				const researchTask = runResearchForCompany(
+				// Queue the research task
+				const researchPromise = runResearch(
 					researchRef,
 					body.topic,
 					companyData.name,
@@ -184,7 +185,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 					`${body.projectId}_${companyId}_${researchRef.id}`
 				);
 
-				backgroundTasks.push(researchTask);
+				researchTasks.push(researchPromise);
 
 				researchResults.push({
 					companyId,
@@ -193,7 +194,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 				});
 
 			} catch (error) {
-				console.error(`Failed to create research for company ${companyId}:`, error);
+				console.error(`[Research] Failed to create research for ${companyId}:`, error);
 				researchResults.push({
 					companyId,
 					researchId: '',
@@ -203,35 +204,29 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			}
 		}
 
-		// Use Vercel's waitUntil to run research in background
-		// This keeps the function alive after the response is sent
-		if (backgroundTasks.length > 0) {
-			const allResearch = Promise.all(backgroundTasks).then(() => {
-				console.log(`[Research] All ${backgroundTasks.length} research tasks completed`);
-			}).catch((err) => {
-				console.error('[Research] Background research failed:', err);
-			});
-
-			// Use platform.context.waitUntil for Vercel adapter
-			// Type assertion needed because SvelteKit's Platform type may not include Vercel's context
-			const vercelPlatform = platform as { context?: { waitUntil?: (promise: Promise<unknown>) => void } } | undefined;
+		// Use waitUntil to run all research tasks in the background
+		// This keeps the function running even after the response is sent
+		if (researchTasks.length > 0) {
+			console.log(`[Research] Queuing ${researchTasks.length} research tasks with waitUntil`);
 			
-			if (vercelPlatform?.context?.waitUntil) {
-				console.log('[Research] Using Vercel waitUntil for background processing');
-				vercelPlatform.context.waitUntil(allResearch);
-			} else {
-				// Fallback: log warning but don't block
-				console.warn('[Research] waitUntil not available - research may not complete in serverless');
-				// Still run in background, but may be terminated
-				allResearch.catch(console.error);
-			}
+			// Run all research tasks sequentially to avoid overwhelming resources
+			const sequentialResearch = async () => {
+				for (const task of researchTasks) {
+					await task;
+				}
+				console.log(`[Research] All ${researchTasks.length} research tasks completed`);
+			};
+
+			waitUntil(sequentialResearch());
 		}
 
 		// Calculate summary
 		const successful = researchResults.filter(r => r.success).length;
 		const failed = researchResults.filter(r => !r.success).length;
 
-		// Return immediately - research continues in background via waitUntil
+		console.log(`[Research] Returning response - ${successful} started, ${failed} failed`);
+
+		// Return immediately - research continues in background
 		return json({
 			success: true,
 			results: researchResults,
