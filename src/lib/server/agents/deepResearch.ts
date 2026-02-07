@@ -65,7 +65,7 @@ async function getCheckpointer(): Promise<MongoDBSaver> {
  */
 async function createDeepResearchAgent(apiKey?: string, recursionLimit: number = 25) {
 	// Use a capable model for research tasks
-	const model = createLLM('google/gemini-2.0-flash-001', 8192, 0.3, apiKey);
+	const model = createLLM('google/gemini-2.5-flash:nitro', 8192, 0.3, apiKey);
 
 	// Get the checkpointer (ensures MongoDB connection is established)
 	const saver = await getCheckpointer();

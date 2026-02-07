@@ -173,6 +173,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 				await researchRef.set(initialResearch);
 
+				// Increment researchCount on the company document
+				await companiesCollection.doc(companyId).update({
+					researchCount: FieldValue.increment(1)
+				});
+
 				// Queue the research task
 				const researchPromise = runResearch(
 					researchRef,
@@ -316,6 +321,74 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		});
 	} catch (error) {
 		console.error('Get research error:', error);
+		return json(
+			{
+				success: false,
+				error: error instanceof Error ? error.message : 'Internal server error'
+			},
+			{ status: 500 }
+		);
+	}
+};
+
+/**
+ * DELETE /api/v1/research?projectId=xxx&companyId=yyy&researchId=zzz
+ * 
+ * Delete a specific research document and decrement the company's researchCount
+ */
+export const DELETE: RequestHandler = async ({ url, locals }) => {
+	if (!locals.userID) {
+		return json({ success: false, error: 'Unauthorized' }, { status: 401 });
+	}
+
+	const projectId = url.searchParams.get('projectId');
+	const companyId = url.searchParams.get('companyId');
+	const researchId = url.searchParams.get('researchId');
+
+	if (!projectId || !companyId || !researchId) {
+		return json(
+			{ success: false, error: 'projectId, companyId, and researchId are all required' },
+			{ status: 400 }
+		);
+	}
+
+	try {
+		// Verify project ownership
+		const projectRef = adminDB.collection('projects').doc(projectId);
+		const projectDoc = await projectRef.get();
+
+		if (!projectDoc.exists) {
+			return json({ success: false, error: 'Project not found' }, { status: 404 });
+		}
+
+		const projectData = projectDoc.data();
+		if (projectData?.userId !== locals.userID) {
+			return json({ success: false, error: 'Forbidden' }, { status: 403 });
+		}
+
+		// Verify research document exists
+		const companyRef = projectRef.collection('companies').doc(companyId);
+		const researchRef = companyRef.collection('research').doc(researchId);
+		const researchDoc = await researchRef.get();
+
+		if (!researchDoc.exists) {
+			return json({ success: false, error: 'Research not found' }, { status: 404 });
+		}
+
+		// Delete the research document and decrement researchCount
+		const batch = adminDB.batch();
+		batch.delete(researchRef);
+		batch.update(companyRef, {
+			researchCount: FieldValue.increment(-1)
+		});
+		await batch.commit();
+
+		return json({
+			success: true,
+			data: { researchId, companyId, projectId }
+		});
+	} catch (error) {
+		console.error('Delete research error:', error);
 		return json(
 			{
 				success: false,

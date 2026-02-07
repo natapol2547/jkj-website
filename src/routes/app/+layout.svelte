@@ -5,6 +5,7 @@
 	import { firestore, auth, user, storage, analytics } from '$lib/firebase.svelte.js';
 	import { signOut } from '$lib/auth';
 	import FirebaseApp from '$lib/components/FirebaseApp.svelte';
+	import Collection from '$lib/components/Collection.svelte';
 	import {
 		Search,
 		FolderKanban,
@@ -17,9 +18,16 @@
 		History,
 		Bookmark,
 		HelpCircle,
-		Bell
+		Bell,
+		MessageSquare,
+		Pencil,
+		Trash2,
+		Check,
+		X,
+		Plus
 	} from '@lucide/svelte';
 	import { fade, fly } from 'svelte/transition';
+	import { query, collection, where, orderBy, limit, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 	let { data, children }: LayoutProps = $props();
 
@@ -34,15 +42,12 @@
 	let mobileMenuOpen = $state(false);
 
 	const navItems = [
-		{ href: '/app', icon: Search, label: 'Search', exact: true },
+		{ href: '/app', icon: Search, label: 'New Search', exact: true },
 		{ href: '/app/projects', icon: FolderKanban, label: 'Projects' },
-		// { href: '/app/saved', icon: Bookmark, label: 'Saved Leads' },
-		{ href: '/app/history', icon: History, label: 'History' }
 	];
 
 	const bottomNavItems = [
 		{ href: '/app/settings', icon: Settings, label: 'Settings' },
-		// { href: '/app/help', icon: HelpCircle, label: 'Help & Support' }
 	];
 
 	function isActive(href: string, exact: boolean = false) {
@@ -52,9 +57,72 @@
 		return $page.url.pathname.startsWith(href);
 	}
 
+	function isChatActive(sessionId: string) {
+		return $page.url.pathname === `/app/c/${sessionId}`;
+	}
+
 	async function handleSignOut() {
 		await signOut(auth);
 		goto('/');
+	}
+
+	// Chat history state
+	let editingSessionId = $state<string | null>(null);
+	let editingName = $state('');
+	let deletingSessionId = $state<string | null>(null);
+
+	// Build query for chat sessions
+	const chatSessionsQuery = $derived.by(() => {
+		if (!user.current?.uid || !firestore) return null;
+		return query(
+			collection(firestore, 'chat_sessions'),
+			where('userId', '==', user.current.uid),
+			orderBy('updatedAt', 'desc'),
+			limit(30)
+		);
+	});
+
+	function startRename(sessionId: string, currentName: string) {
+		editingSessionId = sessionId;
+		editingName = currentName;
+	}
+
+	async function saveRename(sessionId: string) {
+		if (!firestore || !editingName.trim()) return;
+		try {
+			const sessionRef = doc(firestore, 'chat_sessions', sessionId);
+			await updateDoc(sessionRef, { displayName: editingName.trim() });
+		} catch (err) {
+			console.error('Failed to rename session:', err);
+		}
+		editingSessionId = null;
+		editingName = '';
+	}
+
+	function cancelRename() {
+		editingSessionId = null;
+		editingName = '';
+	}
+
+	async function deleteSession(sessionId: string) {
+		try {
+			// Delete from server (handles Firestore + MongoDB cleanup)
+			const response = await fetch(`/api/v1/chat-sessions?sessionId=${sessionId}`, {
+				method: 'DELETE'
+			});
+			const result = await response.json();
+			if (!result.success) {
+				console.error('Failed to delete session:', result.error);
+			}
+
+			// If we're currently on this chat, redirect to search
+			if (isChatActive(sessionId)) {
+				goto('/app');
+			}
+		} catch (err) {
+			console.error('Failed to delete session:', err);
+		}
+		deletingSessionId = null;
 	}
 </script>
 
@@ -97,6 +165,122 @@
 					</li>
 				{/each}
 			</ul>
+
+			<!-- Chat History Section -->
+			{#if sidebarOpen}
+				<div class="my-4 border-t border-slate-800/50"></div>
+				
+				<div class="flex items-center justify-between px-3 mb-2">
+					<span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Chat History</span>
+					<a
+						href="/app"
+						class="rounded p-1 text-slate-500 transition-colors hover:bg-slate-800 hover:text-violet-400"
+						title="New chat"
+					>
+						<Plus class="h-3.5 w-3.5" />
+					</a>
+				</div>
+
+				{#if chatSessionsQuery}
+					<Collection ref={chatSessionsQuery}>
+						{#snippet children({ data: sessions })}
+							<ul class="space-y-0.5">
+								{#each sessions as session (session.id)}
+									{@const displayName = session.displayName || session.firstMessage || 'Untitled chat'}
+									<li class="group relative">
+										{#if editingSessionId === session.id}
+											<!-- Inline Rename -->
+											<div class="flex items-center gap-1 px-2 py-1.5">
+												<input
+													type="text"
+													bind:value={editingName}
+													onkeydown={(e) => {
+														if (e.key === 'Enter') saveRename(session.id);
+														if (e.key === 'Escape') cancelRename();
+													}}
+													class="flex-1 rounded bg-slate-800 px-2 py-1 text-xs text-white border border-violet-500/50 outline-none min-w-0"
+												/>
+												<button
+													onclick={() => saveRename(session.id)}
+													class="rounded p-1 text-emerald-400 hover:bg-emerald-500/20"
+												>
+													<Check class="h-3 w-3" />
+												</button>
+												<button
+													onclick={cancelRename}
+													class="rounded p-1 text-slate-400 hover:bg-slate-700"
+												>
+													<X class="h-3 w-3" />
+												</button>
+											</div>
+										{:else}
+											<a
+												href="/app/c/{session.id}"
+												class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm h-8 transition-all
+													{isChatActive(session.id)
+														? 'bg-violet-600/20 text-violet-400'
+														: 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}"
+											>
+												<MessageSquare class="h-4 w-4 shrink-0 opacity-60" />
+												<span class="flex-1 truncate text-xs">{displayName}</span>
+												
+												<!-- Action buttons (visible on hover) -->
+												<div class="hidden group-hover:flex items-center gap-0.5 shrink-0">
+													<button
+														onclick={(e) => {
+															e.preventDefault();
+															e.stopPropagation();
+															startRename(session.id, displayName);
+														}}
+														class="rounded p-1 text-slate-500 hover:bg-slate-700 hover:text-white"
+														title="Rename"
+													>
+														<Pencil class="h-3 w-3" />
+													</button>
+													<button
+														onclick={(e) => {
+															e.preventDefault();
+															e.stopPropagation();
+															deletingSessionId = session.id;
+														}}
+														class="rounded p-1 text-slate-500 hover:bg-red-500/20 hover:text-red-400"
+														title="Delete"
+													>
+														<Trash2 class="h-3 w-3" />
+													</button>
+												</div>
+											</a>
+										{/if}
+									</li>
+								{/each}
+							</ul>
+
+							{#if sessions.length === 0}
+								<div class="px-3 py-4 text-center">
+									<p class="text-xs text-slate-500">No chat history yet</p>
+									<p class="text-xs text-slate-600 mt-1">Start a search to create one</p>
+								</div>
+							{/if}
+						{/snippet}
+
+						{#snippet loading()}
+							<div class="px-3 py-4 text-center">
+								<span class="text-xs text-slate-500">Loading chats...</span>
+							</div>
+						{/snippet}
+					</Collection>
+				{/if}
+			{:else}
+				<!-- Collapsed sidebar: just show chat icon -->
+				<div class="my-4 border-t border-slate-800/50"></div>
+				<a
+					href="/app"
+					class="flex items-center justify-center rounded-xl px-3 py-2.5 text-slate-400 hover:bg-slate-800/50 hover:text-white"
+					title="Chat History"
+				>
+					<MessageSquare class="h-5 w-5" />
+				</a>
+			{/if}
 
 			<!-- Divider -->
 			<div class="my-4 border-t border-slate-800/50"></div>
@@ -258,7 +442,7 @@
 				></button>
 
 				<!-- Drawer -->
-				<div class="absolute left-0 top-0 h-full w-72 bg-[#0a0a0a] p-4">
+				<div class="absolute left-0 top-0 h-full w-72 bg-[#0a0a0a] p-4 overflow-y-auto">
 					<!-- Close Button -->
 					<div class="flex items-center justify-between mb-6">
 						<a href="/app" class="flex items-center gap-2">
@@ -295,6 +479,34 @@
 						{/each}
 					</nav>
 
+					<!-- Mobile Chat History -->
+					<div class="my-4 border-t border-slate-800/50"></div>
+					<div class="flex items-center justify-between px-3 mb-2">
+						<span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Chat History</span>
+					</div>
+					{#if chatSessionsQuery}
+						<Collection ref={chatSessionsQuery}>
+							{#snippet children({ data: sessions })}
+								<nav class="space-y-0.5">
+									{#each sessions as session (session.id)}
+										{@const displayName = session.displayName || session.firstMessage || 'Untitled chat'}
+										<a
+											href="/app/c/{session.id}"
+											onclick={() => mobileMenuOpen = false}
+											class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm h-8 transition-all
+												{isChatActive(session.id)
+													? 'bg-violet-600/20 text-violet-400'
+													: 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}"
+										>
+											<MessageSquare class="h-4 w-4 shrink-0 opacity-60" />
+											<span class="truncate text-xs">{displayName}</span>
+										</a>
+									{/each}
+								</nav>
+							{/snippet}
+						</Collection>
+					{/if}
+
 					<div class="my-4 border-t border-slate-800/50"></div>
 
 					<nav class="space-y-1">
@@ -320,3 +532,48 @@
 	</div>
 </div>
 </FirebaseApp>
+
+<!-- Delete Confirmation Modal -->
+{#if deletingSessionId}
+	<div class="fixed inset-0 z-60 flex items-center justify-center p-4" transition:fade={{ duration: 150 }}>
+		<button
+			class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+			onclick={() => (deletingSessionId = null)}
+			aria-label="Close modal"
+		></button>
+
+		<div
+			class="relative w-full max-w-sm rounded-2xl border border-slate-800/50 bg-[#141414] p-6 shadow-xl"
+			transition:fly={{ y: 20, duration: 300 }}
+		>
+			<div class="mb-4 flex items-center gap-3">
+				<div class="rounded-full bg-red-500/20 p-3">
+					<Trash2 class="h-5 w-5 text-red-400" />
+				</div>
+				<div>
+					<h3 class="text-lg font-bold text-white">Delete Chat</h3>
+					<p class="text-sm text-slate-400">This cannot be undone</p>
+				</div>
+			</div>
+
+			<p class="mb-6 text-sm text-slate-300">
+				Are you sure you want to delete this chat? All messages will be permanently removed.
+			</p>
+
+			<div class="flex gap-3">
+				<button
+					onclick={() => (deletingSessionId = null)}
+					class="flex-1 rounded-lg border border-slate-700/50 bg-slate-800/50 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+				>
+					Cancel
+				</button>
+				<button
+					onclick={() => deleteSession(deletingSessionId!)}
+					class="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-500"
+				>
+					Delete
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}

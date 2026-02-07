@@ -123,5 +123,31 @@ export async function closeMongo(): Promise<void> {
 	}
 }
 
+/**
+ * Delete all checkpoint data for a given thread from a LangChain checkpoint database.
+ * This removes data from both the 'checkpoints' and 'checkpoint_writes' collections.
+ * @param dbName - The checkpoint database name (e.g. 'conversation_history', 'project_chat_history')
+ * @param threadId - The thread_id to delete data for
+ */
+export async function deleteCheckpointData(dbName: string, threadId: string): Promise<{ deletedCheckpoints: number; deletedWrites: number }> {
+	await getConnectedClient();
+	const db = client.db(dbName);
+
+	// LangChain MongoDBSaver uses these collection names
+	const checkpointsResult = await db.collection('checkpoints').deleteMany({
+		thread_id: threadId
+	});
+	const writesResult = await db.collection('checkpoint_writes').deleteMany({
+		thread_id: threadId
+	});
+
+	console.log(`[MongoDB] Deleted checkpoint data for thread "${threadId}" in db "${dbName}": ${checkpointsResult.deletedCount} checkpoints, ${writesResult.deletedCount} writes`);
+
+	return {
+		deletedCheckpoints: checkpointsResult.deletedCount,
+		deletedWrites: writesResult.deletedCount
+	};
+}
+
 // Export client for advanced usage
 export { client };

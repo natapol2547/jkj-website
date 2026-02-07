@@ -120,7 +120,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					name: company.name,
 					businessdomain: company.businessdomain || '',
 					address: company.address || '',
-					addedAt: timestamp as any
+					addedAt: timestamp as any,
+					researchCount: 0
 				};
 
 				batch.set(companyRef, companyData);

@@ -71,7 +71,8 @@ export const POST: RequestHandler = async ({ url, request, locals }) => {
 			name: body.name,
 			businessdomain: body.businessdomain || '',
 			address: body.address || '',
-			addedAt: FieldValue.serverTimestamp() as any
+			addedAt: FieldValue.serverTimestamp() as any,
+			researchCount: 0
 		};
 
 		await companyRef.set(companyData);

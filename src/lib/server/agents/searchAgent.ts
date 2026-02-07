@@ -5,6 +5,7 @@ import { tools } from '../tools/index';
 import { getConnectedClient } from '../mongo';
 import { createLLM } from '../llm';
 import { ToolNode } from "@langchain/langgraph/prebuilt";
+import type { LangChainMessage } from '../utils/messageConverter';
 
 // System prompt for the search agent
 const SYSTEM_PROMPT = `You are Julist AI, a AI search assistant. You can use tools to find relevant information and give it in a concise and informative way according to user's request.
@@ -31,7 +32,7 @@ async function getCheckpointer(): Promise<MongoDBSaver> {
  */
 async function createSearchAgent(apiKey?: string, recursionLimit: number = 10) {
 	// Use OpenRouter as the LLM provider (OpenAI-compatible API)
-	const model = createLLM('openai/gpt-oss-120b:nitro', 4096, 0.5, apiKey);
+	const model = createLLM('google/gemini-2.5-flash:nitro', 4096, 0.5, apiKey);
 
 	// Get the checkpointer (ensures MongoDB connection is established)
 	const saver = await getCheckpointer();
@@ -163,5 +164,5 @@ export async function streamSearchAgent(options: SearchAgentOptions) {
 export async function getConversationHistory(threadId: string) {
 	const saver = await getCheckpointer();
 	const state = await saver.get({ configurable: { thread_id: threadId } });
-	return state?.channel_values?.messages || [];
+	return (state?.channel_values?.messages || []) as LangChainMessage[];
 }

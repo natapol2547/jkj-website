@@ -10,6 +10,8 @@ export interface ProjectCompany {
   businessdomain: string;
   address: string;
   addedAt: Timestamp;
+  /** Number of completed/running research docs. 0 = not researched. Defaults to 0 for existing docs. */
+  researchCount: number;
 }
 
 /**

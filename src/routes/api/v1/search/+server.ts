@@ -11,41 +11,45 @@ import { toBaseMessages, toUIMessageStream } from '@ai-sdk/langchain';
  * Search for Thai companies using the AI-powered search agent.
  * 
  * Request body:
- * - query: string (required) - The search query
- * - threadId: string (optional) - Conversation thread ID for context
- * - stream: boolean (optional) - Whether to stream the response
+ * - messages: UIMessage[] (required) - The conversation messages
+ * - threadId: string (required) - Conversation thread ID (session ID) for persistence
  * 
  * Response:
- * - success: boolean
- * - response: string - The AI agent's response
- * - messages: array - Full conversation messages
+ * - Streamed UI message response
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
 	// Check authentication
-	// if (!locals.userID) {
-	// 	return json({ error: 'Unauthorized' }, { status: 401 });
-	// }
+	if (!locals.userID) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
 
 	try {
 		const body = await request.json();
 
 		const { messages, threadId }: { messages: UIMessage[], threadId: string } = body;
 
-            const lastMessage = messages[messages.length - 1];
-        const query = lastMessage.parts[0]?.type === 'text' ? lastMessage.parts[0]?.text : '';
+		const lastMessage = messages[messages.length - 1];
+		const query = lastMessage.parts[0]?.type === 'text' ? lastMessage.parts[0]?.text : '';
 
-		// Generate a unique thread ID if not provided (use user ID for persistence)
+		if (!query) {
+			return json(
+				{ success: false, error: 'No query text found in the last message' },
+				{ status: 400 }
+			);
+		}
+
+		// Use the provided threadId (session ID) or generate one as fallback
 		const conversationThreadId = threadId || `user_${locals.userID}_${Date.now()}`;
 
-        // Test stream
-        const agentStream = await streamSearchAgent({
-            query,
-            threadId: conversationThreadId
-        });
+		// Stream the search agent response
+		const agentStream = await streamSearchAgent({
+			query,
+			threadId: conversationThreadId
+		});
 
-        return createUIMessageStreamResponse({
-            stream: toUIMessageStream(agentStream),
-        });
+		return createUIMessageStreamResponse({
+			stream: toUIMessageStream(agentStream),
+		});
 	} catch (error) {
 		console.error('Search API error:', error);
 		return json(
@@ -64,9 +68,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * Simple search endpoint for testing (requires authentication)
  */
 export const GET: RequestHandler = async ({ url, locals }) => {
-	// if (!locals.userID) {
-	// 	return json({ error: 'Unauthorized' }, { status: 401 });
-	// }
+	if (!locals.userID) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
 
 	const query = url.searchParams.get('q');
 
@@ -80,7 +84,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	try {
 		const result = await runSearchAgent({
 			query,
-			threadId: `user_${1}_get`
+			threadId: `user_${locals.userID}_get`
 		});
 
 		const messages = result.messages || [];

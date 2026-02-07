@@ -30,6 +30,7 @@
 	} from '@lucide/svelte';
 	import { Chat } from '@ai-sdk/svelte';
 	import { DefaultChatTransport, type UIMessage } from 'ai';
+	import { browser } from '$app/environment';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
 	import SearchLanding from '$lib/components/SearchLanding.svelte';
@@ -94,6 +95,10 @@
 	function parseMarkdown(content: string): string {
 		// First parse markdown to HTML
 		const html = marked(content) as string;
+
+		// During SSR, skip browser-only APIs (DOMPurify, DOMParser)
+		// The client will hydrate and re-render with full sanitization
+		if (!browser) return html;
 
 		// Sanitize HTML but allow safe classes and elements
 		const sanitized = DOMPurify.sanitize(html, {
@@ -481,12 +486,12 @@
 								<div
 									class="text-slate-300 leading-relaxed space-y-3 inline-flex items-center gap-2 rounded-lg bg-[#1a1a1a] border border-slate-700/50 px-4 py-2 w-full min-h-16 overflow-y-auto"
 								>
-									<!-- Tool -->
-									{#if lastPart && lastPart.type === 'dynamic-tool'}
-										<span class="skeleton skeleton-text" transition:fade={{ duration: 300 }}
-											>Using {formatToolName(lastPart.toolName)} Tool</span
-										>
-									{/if}
+								<!-- Tool (only show for active/in-progress calls, not completed ones) -->
+								{#if lastPart && lastPart.type === 'dynamic-tool' && lastPart.state !== 'output-available'}
+									<span class="skeleton skeleton-text" transition:fade={{ duration: 300 }}
+										>Using {formatToolName(lastPart.toolName)} Tool</span
+									>
+								{/if}
 									<!-- End AI Response -->
 									{#if lastAIResponse}
 										{#if !lastAIResponse || lastAIResponse == ''}
