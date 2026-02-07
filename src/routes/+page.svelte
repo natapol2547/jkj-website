@@ -37,66 +37,56 @@
 	// Pricing Tiers Data
 	const pricingTiers = [
 		{
-			name: 'Free',
-			price: '฿0',
-			period: 'forever',
-			description: 'Perfect for trying out Julist and small projects',
+			name: 'Starter (SME)',
+			price: '฿149',
+			period: '/ user / month',
+			description: 'For small and medium enterprises getting started with lead generation',
 			icon: Rocket,
 			gradient: 'from-slate-500 to-slate-600',
 			buttonStyle: 'bg-slate-900 hover:bg-slate-800 text-white',
 			popular: false,
 			features: [
-				{ text: '5 searches per month', included: true },
-				{ text: '10 leads per search', included: true },
-				{ text: 'Basic Thai NLP', included: true },
-				{ text: 'CSV export', included: true },
-				{ text: 'Email support', included: true },
-				{ text: 'Scout Agent access', included: false },
-				{ text: 'Lead verification', included: false },
-				{ text: 'PDPA compliance tools', included: false },
-				{ text: 'AI lead scoring', included: false }
+				{ text: '500 searches / month', included: true },
+				{ text: 'Search Agent (query) included', included: true },
+				{ text: 'Export to CSV / CRM', included: true },
+				{ text: 'Search Agent with advanced analysis', included: false },
+				{ text: 'CRM sync (HubSpot, Salesforce)', included: false },
+				{ text: 'Partner verification', included: false },
+				{ text: 'Priority processing', included: false }
 			]
 		},
 		{
-			name: 'Pro',
-			price: '฿170',
-			period: '/month',
-			description: 'For growing teams who need verified, quality leads',
+			name: 'Pro (Sales Teams)',
+			price: '฿299',
+			period: '/ user / month',
+			description: 'For sales teams who need advanced analysis and CRM integrations',
 			icon: Crown,
 			gradient: 'from-violet-500 to-purple-600',
 			buttonStyle: 'btn-primary text-white',
 			popular: true,
 			features: [
-				{ text: '50 searches per month', included: true },
-				{ text: 'Unlimited leads per search', included: true },
-				{ text: 'Advanced Thai NLP + slang', included: true },
-				{ text: 'CSV & Excel export', included: true },
-				{ text: 'Priority support', included: true },
-				{ text: 'Scout Agent access', included: true },
-				{ text: 'Lead verification', included: true },
-				{ text: 'PDPA compliance tools', included: true },
-				{ text: 'AI lead scoring', included: true }
+				{ text: '1,000 searches / month', included: true },
+				{ text: 'Search Agent with advanced analysis', included: true },
+				{ text: 'CRM sync (HubSpot, Salesforce)', included: true },
+				{ text: 'Partner verification', included: true },
+				{ text: 'Priority processing', included: true },
+				{ text: 'Export to CSV / CRM', included: true }
 			]
 		},
 		{
-			name: 'Enterprise',
-			price: 'Custom',
-			period: '',
-			description: 'For organizations with advanced needs and scale',
+			name: 'Custom Add-ons',
+			price: '฿49',
+			period: '/ user',
+			description: 'Usage-based add-ons for developers and companies needing more flexibility',
 			icon: Building2,
 			gradient: 'from-amber-500 to-orange-600',
 			buttonStyle: 'bg-amber-500 hover:bg-amber-600 text-white',
 			popular: false,
 			features: [
-				{ text: 'Unlimited searches', included: true },
-				{ text: 'Unlimited leads', included: true },
-				{ text: 'Custom NLP training', included: true },
-				{ text: 'API access', included: true },
-				{ text: 'Dedicated account manager', included: true },
-				{ text: 'Custom Scout Agent workflows', included: true },
-				{ text: 'Team collaboration', included: true },
-				{ text: 'Custom PDPA workflows', included: true },
-				{ text: 'SLA guarantee', included: true }
+				{ text: 'Add-on 100 searches', included: true },
+				{ text: 'Partner verification', included: true },
+				{ text: 'Custom Agent Pipeline with private data', included: true },
+				{ text: 'For developers and companies', included: true }
 			]
 		}
 	];
@@ -611,13 +601,13 @@
 
 						<!-- CTA Button -->
 						<button class="btn btn-lg w-full rounded-full px-6 py-3.5 text-sm font-semibold transition-all {tier.buttonStyle} {tier.popular ? 'shadow-lg shadow-violet-200/50' : ''}">
-							{#if tier.name === 'Enterprise'}
-								Contact Sales
-							{:else if tier.name === 'Free'}
-								Get Started Free
-							{:else}
-								Start Pro Trial
-							{/if}
+						{#if tier.name === 'Custom Add-ons'}
+							Get Quote
+						{:else if tier.name === 'Starter (SME)'}
+							Purchase
+						{:else}
+							Purchase
+						{/if}
 						</button>
 					</div>
 				{/each}
