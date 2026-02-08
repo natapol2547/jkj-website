@@ -89,13 +89,31 @@
 	});
 
 	/**
+	 * Encode spaces in markdown link URLs so marked parses them correctly.
+	 * Marked treats space as end of URL; encoding as %20 keeps the full href.
+	 */
+	function encodeSpacesInMarkdownLinks(content: string): string {
+		return content.replace(/\]\(([^)]+)\)/g, (_match, inside) => {
+			const trimmed = inside.trim();
+			// Optional title: url "title" or url 'title'
+			const titleMatch = trimmed.match(/^([^"']*?)(\s+["'].*)$/);
+			const urlPart = titleMatch ? titleMatch[1].trim() : trimmed;
+			const rest = titleMatch ? titleMatch[2] : '';
+			const encodedUrl = urlPart.replace(/ /g, '%20');
+			return `](${encodedUrl}${rest})`;
+		});
+	}
+
+	/**
 	 * Parse markdown and sanitize HTML for safe rendering
 	 * Allows Tailwind CSS classes and DaisyUI components
 	 * All links will open in a new tab
 	 */
 	function parseMarkdown(content: string): string {
-		// First parse markdown to HTML
-		const html = marked(content) as string;
+		// Encode spaces in link URLs so marked parses full URL (marked stops at space)
+		const normalized = encodeSpacesInMarkdownLinks(content);
+		// Parse markdown to HTML
+		const html = marked(normalized) as string;
 
 		// During SSR, skip browser-only APIs (DOMPurify, DOMParser)
 		// The client will hydrate and re-render with full sanitization
