@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { signInWithGoogle } from '$lib/auth';
+	import { signInWithGoogle, signInAsGuest } from '$lib/auth';
 	import { auth, user } from '$lib/firebase.svelte';
-	import { Zap, ArrowLeft, Loader2 } from '@lucide/svelte';
+	import { Zap, ArrowLeft, Loader2, UserCircle } from '@lucide/svelte';
 
 	let loading = $state(false);
+	let guestLoading = $state(false);
 	let error = $state<string | null>(null);
 
 	// Redirect if already signed in
@@ -21,6 +22,7 @@
 		}
 
 		loading = true;
+		guestLoading = false;
 		error = null;
 
 		try {
@@ -30,6 +32,26 @@
 			error = err instanceof Error ? err.message : 'Failed to sign in. Please try again.';
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function handleGuestSignIn() {
+		if (!auth) {
+			error = 'Authentication is not available. Please refresh the page.';
+			return;
+		}
+
+		guestLoading = true;
+		loading = false;
+		error = null;
+
+		try {
+			await signInAsGuest(auth);
+			// Redirect will happen automatically via the $effect above
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to sign in as guest. Please try again.';
+		} finally {
+			guestLoading = false;
 		}
 	}
 </script>
@@ -84,7 +106,7 @@
 			<!-- Google Sign In Button -->
 			<button
 				onclick={handleGoogleSignIn}
-				disabled={loading}
+				disabled={loading || guestLoading}
 				class="w-full group relative flex items-center justify-center gap-3 rounded-full bg-white border-2 border-slate-200 px-6 py-4 text-base font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
 			>
 				{#if loading}
@@ -99,6 +121,21 @@
 						<path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
 					</svg>
 					<span>Continue with Google</span>
+				{/if}
+			</button>
+
+			<!-- Sign in as Guest -->
+			<button
+				onclick={handleGuestSignIn}
+				disabled={loading || guestLoading}
+				class="mt-3 w-full flex items-center justify-center gap-3 rounded-full border border-slate-200 bg-slate-50/80 px-6 py-3.5 text-sm font-medium text-slate-600 transition-all hover:bg-slate-100 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+			>
+				{#if guestLoading}
+					<Loader2 class="h-4 w-4 animate-spin text-slate-500" />
+					<span>Signing in as guest...</span>
+				{:else}
+					<UserCircle class="h-4 w-4 text-slate-500" />
+					<span>Sign in as Guest</span>
 				{/if}
 			</button>
 

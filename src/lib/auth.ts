@@ -1,8 +1,9 @@
-import { 
-	signInWithPopup, 
-	GoogleAuthProvider, 
+import {
+	signInWithPopup,
+	signInAnonymously,
+	GoogleAuthProvider,
 	type Auth,
-	type User 
+	type User
 } from "firebase/auth";
 import type { AuthError } from "firebase/auth";
 
@@ -50,6 +51,25 @@ export async function signInWithGoogle(auth: Auth): Promise<User> {
 		} else {
 			throw new Error(authError.message || 'Failed to sign in with Google. Please try again.');
 		}
+	}
+}
+
+/**
+ * Sign in anonymously (guest)
+ * @param auth Firebase Auth instance
+ * @returns Promise that resolves with the anonymous user
+ */
+export async function signInAsGuest(auth: Auth): Promise<User> {
+	try {
+		const result = await signInAnonymously(auth);
+		await _setSessionCookie(await result.user.getIdToken());
+		return result.user;
+	} catch (error) {
+		const authError = error as AuthError;
+		if (authError.code === "auth/operation-not-allowed") {
+			throw new Error("Anonymous sign-in is not enabled. Please use Google sign-in.");
+		}
+		throw new Error(authError.message || "Failed to sign in as guest. Please try again.");
 	}
 }
 
