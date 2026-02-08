@@ -24,6 +24,9 @@ Use this for general internet research to find:
 - Company websites and social media presence
 - Financial reports and business updates
 
+### \`draft_email\`
+Use this to save a draft email for the company (e.g. cold outreach, partnership proposal, follow-up). Provide subject, body, and optionally the recipient email (to). The draft is stored and the user can send it via Gmail from the company page. Only call this when the research topic or user request involves drafting an email.
+
 ## Research Guidelines
 
 1. **Start with our database**: Always begin by searching for the company in our database using \`company_search\`
