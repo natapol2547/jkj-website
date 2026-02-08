@@ -167,7 +167,7 @@ export const companySearchTool = tool(
 			console.log(`Reranked: ${formattedResults.length} → ${rerankedResults.length} results`);
 
             if (rerankedResults.length === 0) {
-                const errorMessage = "No results found. Try using additional filters or use 'internet_search' tool to find more information.";
+                const errorMessage = "No results found on `company_search` tool. Please retry by using `internet_search` tool to find more information. If you still can't find the information, please try again with a different query.";
                 return JSON.stringify(
                     {
                         success: false,
