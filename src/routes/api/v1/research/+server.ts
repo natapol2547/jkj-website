@@ -14,7 +14,9 @@ async function runResearch(
 	topic: string,
 	companyName: string,
 	companyContext: { businessdomain?: string; address?: string },
-	threadId: string
+	threadId: string,
+	projectId: string,
+	companyId: string
 ): Promise<void> {
 	const startTime = Date.now();
 	let lastContent = '';
@@ -28,6 +30,8 @@ async function runResearch(
 			companyContext,
 			threadId,
 			recursionLimit: 15,
+			projectId,
+			companyId,
 			onProgress: async (content: string, isComplete: boolean) => {
 				lastContent = content;
 				try {
@@ -187,7 +191,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						businessdomain: companyData.businessdomain,
 						address: companyData.address
 					},
-					`${body.projectId}_${companyId}_${researchRef.id}`
+					`${body.projectId}_${companyId}_${researchRef.id}`,
+					body.projectId,
+					companyId
 				);
 
 				researchTasks.push(researchPromise);

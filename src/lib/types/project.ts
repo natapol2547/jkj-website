@@ -34,6 +34,20 @@ export interface ResearchDocument {
 }
 
 /**
+ * Email draft stored in Firestore
+ * Path: projects/{projectId}/companies/{companyId}/emails/{emailId}
+ */
+export interface EmailDraft {
+  id?: string;
+  subject: string;
+  body: string;
+  to?: string;
+  status: 'draft' | 'sent';
+  createdAt: Timestamp;
+  sentAt?: Timestamp;
+}
+
+/**
  * API request to start research
  */
 export interface ResearchRequest {

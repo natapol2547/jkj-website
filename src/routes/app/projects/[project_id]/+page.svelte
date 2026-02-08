@@ -40,6 +40,7 @@
 	import { DefaultChatTransport, type UIMessage } from 'ai';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
+	import { useMermaid } from '$lib/actions/mermaid';
 	let { data }: PageProps = $props();
 
 	// Get Firebase context
@@ -103,8 +104,8 @@
 	function parseMarkdown(content: string): string {
 		const html = marked(content) as string;
 		const sanitized = DOMPurify.sanitize(html, {
-			ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','br','hr','ul','ol','li','strong','em','b','i','u','s','del','ins','a','code','pre','blockquote','table','thead','tbody','tr','th','td','span','div','img'],
-			ALLOWED_ATTR: ['class','href','target','rel','src','alt','title','id','name','style'],
+			ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','br','hr','ul','ol','li','strong','em','b','i','u','s','del','ins','a','code','pre','blockquote','table','thead','tbody','tr','th','td','span','div','img','svg','g','path','rect','circle','text','line','polyline','polygon','foreignObject','marker','defs'],
+			ALLOWED_ATTR: ['class','href','target','rel','src','alt','title','id','name','style','viewBox','xmlns','d','fill','stroke','transform','x','y','width','height','cx','cy','r','rx','ry','x1','y1','x2','y2','points','marker-end','marker-start','text-anchor','dominant-baseline','font-size','font-family'],
 			ALLOW_DATA_ATTR: true,
 			ADD_ATTR: ['class']
 		});
@@ -454,7 +455,7 @@
 														<span class="skeleton skeleton-text" transition:fade={{ duration: 300 }}>Using {formatToolName(lastPart.toolName)} Tool</span>
 													{/if}
 													{#if lastAIResponse}
-														<div in:fade={{ duration: 300, delay: 300 }}>
+														<div in:fade={{ duration: 300, delay: 300 }} use:useMermaid={lastAIResponse}>
 															{@html parseMarkdown(lastAIResponse)}
 														</div>
 													{/if}

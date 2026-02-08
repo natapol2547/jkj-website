@@ -34,6 +34,7 @@
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
 	import SearchLanding from '$lib/components/SearchLanding.svelte';
+	import { useMermaid } from '$lib/actions/mermaid';
 	import { firestore, user } from '$lib/firebase.svelte';
 	import Collection from '$lib/components/Collection.svelte';
 	import { query, collection, where, orderBy } from 'firebase/firestore';
@@ -135,7 +136,19 @@
 				'td',
 				'span',
 				'div',
-				'img'
+				'img',
+				'svg',
+				'g',
+				'path',
+				'rect',
+				'circle',
+				'text',
+				'line',
+				'polyline',
+				'polygon',
+				'foreignObject',
+				'marker',
+				'defs'
 			],
 			ALLOWED_ATTR: [
 				'class',
@@ -147,7 +160,33 @@
 				'title',
 				'id',
 				'name',
-				'style'
+				'style',
+				'viewBox',
+				'xmlns',
+				'd',
+				'fill',
+				'stroke',
+				'transform',
+				'x',
+				'y',
+				'width',
+				'height',
+				'cx',
+				'cy',
+				'r',
+				'rx',
+				'ry',
+				'x1',
+				'y1',
+				'x2',
+				'y2',
+				'points',
+				'marker-end',
+				'marker-start',
+				'text-anchor',
+				'dominant-baseline',
+				'font-size',
+				'font-family'
 			],
 			// Allow data attributes for potential future use
 			ALLOW_DATA_ATTR: true,
@@ -497,7 +536,7 @@
 										{#if !lastAIResponse || lastAIResponse == ''}
 											<span class="skeleton skeleton-text">Thinking...</span>
 										{/if}
-										<div in:fade={{ duration: 300, delay: 300 }}>
+										<div in:fade={{ duration: 300, delay: 300 }} use:useMermaid={lastAIResponse}>
 											{@html parseMarkdown(lastAIResponse)}
 											{#if companies}
 												<details

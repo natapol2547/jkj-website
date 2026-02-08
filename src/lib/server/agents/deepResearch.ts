@@ -1,17 +1,13 @@
 import { StateGraph, MessagesAnnotation, START, END } from "@langchain/langgraph";
 import { MongoDBSaver } from "@langchain/langgraph-checkpoint-mongodb";
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
-import { tools } from '../tools/index';
+import { tools, createDraftEmailTool } from '../tools/index';
 import { getConnectedClient } from '../mongo';
 import { createLLM } from '../llm';
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import type { Company } from '../types/company';
 
-/**
- * System prompt for the deep research agent
- * Focused on thorough company research and producing detailed reports
- */
-const RESEARCH_SYSTEM_PROMPT = `You are an expert business researcher specializing in company analysis and market intelligence.
+const RESEARCH_SYSTEM_PROMPT_BASE = `You are an expert business researcher specializing in company analysis and market intelligence.
 
 Your job is to conduct thorough research on companies and produce comprehensive, well-structured reports in Markdown format.
 
@@ -47,7 +43,28 @@ Structure your final report in Markdown with clear sections:
 - Sources and References
 
 Respond in the same language as the user's request (Thai or English).
-Use proper Markdown formatting including headers, bullet points, and links.`;
+Use proper Markdown formatting including headers, bullet points, and links.
+
+## Diagrams (Mermaid)
+
+When helpful, include Mermaid diagrams in your report. Use fenced code blocks with \`\`\`mermaid. Useful diagram types:
+- **Flowchart**: Process flows, decision trees, workflows
+- **Sequence diagram**: Interactions between parties
+- **Entity Relationship**: Company structure, partnerships
+- **Mindmap**: Key themes, market segments
+- **Graph (LR/TB)**: Organizational charts, market position
+
+Example:
+\`\`\`mermaid
+flowchart LR
+  A[Company] --> B[Market]
+  B --> C[Opportunity]
+\`\`\``;
+
+const RESEARCH_SYSTEM_PROMPT_WITH_EMAIL = `
+
+### \`draft_email\`
+Use this to save a draft email for the company (e.g. cold outreach, partnership proposal, follow-up). Provide subject, body, and optionally the recipient email (to). The draft is stored and the user can send it via Gmail from the company page. Only call this when the research topic or user request involves drafting an email.`;
 
 // Lazy checkpointer creation to handle serverless connection issues
 let checkpointer: MongoDBSaver | null = null;
@@ -62,8 +79,24 @@ async function getCheckpointer(): Promise<MongoDBSaver> {
 
 /**
  * Create the deep research agent
+ * When projectId and companyId are provided, the agent gets the draft_email tool.
  */
-async function createDeepResearchAgent(apiKey?: string, recursionLimit: number = 25) {
+async function createDeepResearchAgent(
+	apiKey?: string,
+	recursionLimit: number = 25,
+	projectId?: string,
+	companyId?: string
+) {
+	// Build tools: base tools + optional draft_email when context is provided
+	const researchTools =
+		projectId && companyId
+			? [...tools, createDraftEmailTool(projectId, companyId)]
+			: tools;
+	const systemPrompt =
+		projectId && companyId
+			? RESEARCH_SYSTEM_PROMPT_BASE + RESEARCH_SYSTEM_PROMPT_WITH_EMAIL
+			: RESEARCH_SYSTEM_PROMPT_BASE;
+
 	// Use a capable model for research tasks
 	const model = createLLM('google/gemini-2.5-flash:nitro', 8192, 0.3, apiKey);
 
@@ -74,48 +107,52 @@ async function createDeepResearchAgent(apiKey?: string, recursionLimit: number =
 	async function callModel(state: typeof MessagesAnnotation.State, config: any) {
 		const currentStep = config?.metadata?.langgraph_step || 0;
 		const remainingSteps = recursionLimit - currentStep;
-		
+
 		// If we're within 3 steps of the limit and the last message is a tool message,
 		// force a final response by removing tools
-		const shouldForceResponse = remainingSteps <= 3 && 
-			state.messages.length > 0 && 
+		const shouldForceResponse =
+			remainingSteps <= 3 &&
+			state.messages.length > 0 &&
 			state.messages[state.messages.length - 1].type === 'tool';
-		
+
 		// Add system message if this is the first call
-		const messages = state.messages[0]?.type === 'system' 
-			? state.messages 
-			: [new SystemMessage(RESEARCH_SYSTEM_PROMPT), ...state.messages];
-		
+		const messages =
+			state.messages[0]?.type === 'system'
+				? state.messages
+				: [new SystemMessage(systemPrompt), ...state.messages];
+
 		let response;
-		
+
 		if (shouldForceResponse) {
 			// Call model without tools to force a final response
-			console.log(`[DeepResearch] Approaching recursion limit (step ${currentStep}/${recursionLimit}), forcing final response`);
+			console.log(
+				`[DeepResearch] Approaching recursion limit (step ${currentStep}/${recursionLimit}), forcing final response`
+			);
 			response = await model.invoke(messages, config);
 		} else {
 			// Bind tools for normal operation
-			const modelWithTools = model.bindTools(tools);
+			const modelWithTools = model.bindTools(researchTools);
 			response = await modelWithTools.invoke(messages, config);
 		}
-		
+
 		return { messages: [response] };
 	}
 
 	// Define the function that determines whether to continue or end
 	function shouldContinue(state: typeof MessagesAnnotation.State) {
 		const lastMessage = state.messages[state.messages.length - 1];
-		
+
 		// If the last message has tool calls, continue to the tools node
 		if (lastMessage._getType() === 'ai' && (lastMessage as AIMessage).tool_calls?.length) {
 			return 'tools';
 		}
-		
+
 		// Otherwise, end the agent execution
 		return END;
 	}
 
-	// Create the tool node
-	const toolNode = new ToolNode(tools);
+	// Create the tool node with the same tools
+	const toolNode = new ToolNode(researchTools);
 
 	// Build the graph
 	const workflow = new StateGraph(MessagesAnnotation)
@@ -139,6 +176,9 @@ export interface DeepResearchOptions {
 	apiKey?: string;
 	recursionLimit?: number;
 	onProgress?: (content: string, isComplete: boolean) => Promise<void>;
+	/** When provided with companyId, enables the draft_email tool for this research run */
+	projectId?: string;
+	companyId?: string;
 }
 
 /**
@@ -196,16 +236,18 @@ function extractFinalContent(messages: any[]): string {
  * Run the deep research agent and return the full result
  */
 export async function runDeepResearch(options: DeepResearchOptions): Promise<{ content: string; messages: any[] }> {
-	const { 
-		topic, 
-		companyName, 
-		companyContext, 
-		threadId = `research_${Date.now()}`, 
-		apiKey, 
-		recursionLimit = 25 
+	const {
+		topic,
+		companyName,
+		companyContext,
+		threadId = `research_${Date.now()}`,
+		apiKey,
+		recursionLimit = 25,
+		projectId,
+		companyId
 	} = options;
 
-	const agent = await createDeepResearchAgent(apiKey, recursionLimit);
+	const agent = await createDeepResearchAgent(apiKey, recursionLimit, projectId, companyId);
 
 	const config = {
 		configurable: {
@@ -239,20 +281,22 @@ export async function runDeepResearch(options: DeepResearchOptions): Promise<{ c
  * Stream the deep research agent with periodic progress callbacks
  */
 export async function streamDeepResearch(options: DeepResearchOptions): Promise<{ content: string; messages: any[] }> {
-	const { 
-		topic, 
-		companyName, 
-		companyContext, 
-		threadId = `research_${Date.now()}`, 
-		apiKey, 
+	const {
+		topic,
+		companyName,
+		companyContext,
+		threadId = `research_${Date.now()}`,
+		apiKey,
 		recursionLimit = 25,
-		onProgress 
+		onProgress,
+		projectId,
+		companyId
 	} = options;
 
 	console.log(`[DeepResearch] Creating agent for "${companyName}"...`);
 	const agentStartTime = Date.now();
-	
-	const agent = await createDeepResearchAgent(apiKey, recursionLimit);
+
+	const agent = await createDeepResearchAgent(apiKey, recursionLimit, projectId, companyId);
 	console.log(`[DeepResearch] Agent created in ${Date.now() - agentStartTime}ms`);
 
 	const config = {

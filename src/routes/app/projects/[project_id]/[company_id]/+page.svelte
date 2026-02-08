@@ -3,7 +3,7 @@
 	import Doc from '$lib/components/Doc.svelte';
 	import Collection from '$lib/components/Collection.svelte';
 	import { getFirebaseContext } from '$lib/stores/sdk.svelte';
-	import type { Project, ProjectCompany, ResearchDocument } from '$lib/types/project';
+	import type { Project, ProjectCompany, ResearchDocument, EmailDraft } from '$lib/types/project';
 	import {
 		ArrowLeft,
 		Building2,
@@ -17,14 +17,17 @@
 		Clock,
 		FileText,
 		Calendar,
-		RefreshCw,
 		Trash2,
 		ChevronDown,
-		ChevronUp
+		ChevronUp,
+		Mail,
+		Send
 	} from '@lucide/svelte';
+	import { doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 	import { fly, fade, slide } from 'svelte/transition';
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
+	import { useMermaid } from '$lib/actions/mermaid';
 
 	// Get Firebase context
 	const { firestore } = getFirebaseContext();
@@ -37,6 +40,7 @@
 	const projectRef = $derived(`projects/${projectId}`);
 	const companyRef = $derived(`projects/${projectId}/companies/${companyId}`);
 	const researchRef = $derived(`projects/${projectId}/companies/${companyId}/research`);
+	const emailsRef = $derived(`projects/${projectId}/companies/${companyId}/emails`);
 
 	// Research state
 	let researchTopic = $state('');
@@ -113,11 +117,14 @@
 		expandedResearch = newSet;
 	}
 
-	// Render markdown to HTML
+	// Render markdown to HTML (allows mermaid SVG output)
+	const MARKDOWN_ALLOWED_TAGS = ['h1','h2','h3','h4','h5','h6','p','br','hr','ul','ol','li','strong','em','b','i','u','s','del','ins','a','code','pre','blockquote','table','thead','tbody','tr','th','td','span','div','img','svg','g','path','rect','circle','text','line','polyline','polygon','foreignObject','marker','defs'];
+	const MARKDOWN_ALLOWED_ATTR = ['class','href','target','rel','src','alt','title','id','name','style','viewBox','xmlns','d','fill','stroke','transform','x','y','width','height','cx','cy','r','rx','ry','x1','y1','x2','y2','points','marker-end','marker-start','text-anchor','dominant-baseline','font-size','font-family'];
+
 	function renderMarkdown(content: string): string {
 		if (!content) return '';
 		const html = marked.parse(content) as string;
-		return DOMPurify.sanitize(html);
+		return DOMPurify.sanitize(html, { ALLOWED_TAGS: MARKDOWN_ALLOWED_TAGS, ALLOWED_ATTR: MARKDOWN_ALLOWED_ATTR, ADD_ATTR: ['class'] });
 	}
 
 	// Format date
@@ -131,6 +138,32 @@
 			hour: '2-digit',
 			minute: '2-digit'
 		});
+	}
+
+	// Open Gmail compose with pre-filled to, subject, body
+	function openGmailCompose(to: string, subject: string, body: string) {
+		const base = 'https://mail.google.com/mail/?view=cm';
+		const params = new URLSearchParams();
+		if (to) params.set('to', to);
+		params.set('su', subject);
+		params.set('body', body);
+		window.open(`${base}&${params.toString()}`, '_blank', 'noopener,noreferrer');
+	}
+
+	// Mark email draft as sent (client-side Firestore)
+	async function markEmailAsSent(emailId: string) {
+		const fs = getFirebaseContext().firestore;
+		if (!fs) return;
+		const emailRef = doc(fs, 'projects', projectId, 'companies', companyId, 'emails', emailId);
+		await updateDoc(emailRef, { status: 'sent', sentAt: serverTimestamp() });
+	}
+
+	// Delete email draft (client-side Firestore)
+	async function deleteEmailDraft(emailId: string) {
+		const fs = getFirebaseContext().firestore;
+		if (!fs) return;
+		const emailRef = doc(fs, 'projects', projectId, 'companies', companyId, 'emails', emailId);
+		await deleteDoc(emailRef);
 	}
 
 	// Get status color and icon
@@ -375,7 +408,7 @@
 															<span>Research in progress... Results will appear here.</span>
 														</div>
 														{#if research.content}
-															<div class="mt-4 prose prose-invert prose-sm max-w-none">
+															<div class="mt-4 prose prose-invert prose-sm max-w-none" use:useMermaid>
 																{@html renderMarkdown(research.content)}
 															</div>
 														{/if}
@@ -394,7 +427,7 @@
 													</div>
 												{:else if research.content}
 													<div class="p-6">
-														<div class="prose prose-invert prose-sm max-w-none">
+														<div class="prose prose-invert prose-sm max-w-none" use:useMermaid>
 															{@html renderMarkdown(research.content)}
 														</div>
 														{#if research.completedAt}
@@ -421,6 +454,89 @@
 							<div class="flex items-center gap-3 text-slate-400">
 								<Loader2 class="h-6 w-6 animate-spin" />
 								<span>Loading research history...</span>
+							</div>
+						</div>
+					{/snippet}
+				</Collection>
+			</div>
+
+			<!-- Email Drafts -->
+			<div>
+				<h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+					<Mail class="h-5 w-5 text-violet-400" />
+					Email Drafts
+				</h2>
+				<Collection ref={emailsRef}>
+					{#snippet children({ data: emails, count })}
+						{@const sortedEmails = emails ? [...emails].sort((a: any, b: any) => {
+							const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+							const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+							return bTime - aTime;
+						}) : []}
+						{#if count === 0}
+							<div class="rounded-xl border border-slate-800/50 bg-[#141414] p-8 text-center" in:fade>
+								<div class="mb-3 inline-flex rounded-2xl bg-slate-800/50 p-4">
+									<Mail class="h-10 w-10 text-slate-500" />
+								</div>
+								<p class="text-slate-400 text-sm">No email drafts yet. Use research with a topic like &quot;Write a professional email introducing our services&quot; and the AI can save a draft here.</p>
+							</div>
+						{:else}
+							<div class="space-y-3">
+								{#each sortedEmails as email, i (email.id)}
+									<div
+										class="rounded-xl border border-slate-800/50 bg-[#141414] p-4 transition-all hover:border-slate-700/50"
+										in:fly={{ y: 20, duration: 300, delay: i * 40 }}
+									>
+										<div class="flex items-start justify-between gap-3 mb-2">
+											<h3 class="font-medium text-white line-clamp-1">{email.subject}</h3>
+											<span class="shrink-0 rounded-full px-2 py-0.5 text-xs {email.status === 'sent' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}">
+												{email.status === 'sent' ? 'Sent' : 'Draft'}
+											</span>
+										</div>
+										{#if email.to}
+											<p class="text-xs text-slate-500 mb-1">To: {email.to}</p>
+										{/if}
+										<p class="text-sm text-slate-400 line-clamp-2 mb-3">{email.body}</p>
+										<div class="flex items-center justify-between">
+											<span class="text-xs text-slate-500">{formatDate(email.createdAt)}</span>
+											<div class="flex items-center gap-2">
+												{#if email.status === 'draft'}
+													<button
+														type="button"
+														onclick={() => openGmailCompose(email.to ?? '', email.subject, email.body)}
+														class="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:bg-violet-500"
+													>
+														<Send class="h-3.5 w-3.5" />
+														Send via Gmail
+													</button>
+													<button
+														type="button"
+														onclick={() => markEmailAsSent(email.id)}
+														class="rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-300 transition-all hover:bg-slate-800"
+													>
+														Mark as Sent
+													</button>
+												{/if}
+												<button
+													type="button"
+													onclick={() => deleteEmailDraft(email.id)}
+													class="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-500/20 hover:text-red-400"
+													title="Delete draft"
+												>
+													<Trash2 class="h-4 w-4" />
+												</button>
+											</div>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					{/snippet}
+					{#snippet loading()}
+						<div class="flex items-center justify-center py-8">
+							<div class="flex items-center gap-3 text-slate-400 text-sm">
+								<Loader2 class="h-5 w-5 animate-spin" />
+								<span>Loading email drafts...</span>
 							</div>
 						</div>
 					{/snippet}
