@@ -531,7 +531,7 @@
 
 					<!-- AI Response -->
 					<div
-						class="prose prose-invert prose-headings:my-0 max-w-none"
+						class="prose prose-invert prose-headings:my-0 w-full max-w-4xl"
 						in:fly={{ y: 20, duration: 400 }}
 					>
 						<div class="flex items-start gap-3 mb-4">
